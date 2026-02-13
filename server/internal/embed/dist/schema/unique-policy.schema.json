@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openjobspec.org/schemas/v1/unique-policy.json",
+  "title": "OJS Unique Policy",
+  "description": "Uniqueness policy for OJS job deduplication. Defines the dimensions used to compute a uniqueness fingerprint, the time window, states to check, and conflict resolution strategy.",
+  "type": "object",
+  "properties": {
+    "keys": {
+      "title": "Uniqueness Dimensions",
+      "description": "Dimensions defining the uniqueness fingerprint. 'type' is always included implicitly even if omitted. Valid values: 'type', 'queue', 'args', 'meta'. Default is ['type'].",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["type", "queue", "args", "meta"]
+      },
+      "uniqueItems": true,
+      "default": ["type"],
+      "examples": [
+        ["type"],
+        ["type", "queue"],
+        ["type", "args"],
+        ["type", "queue", "args", "meta"]
+      ]
+    },
+    "args_keys": {
+      "title": "Argument Keys",
+      "description": "Top-level keys within 'args' to include in the uniqueness fingerprint. When omitted or null, all args are included. Only relevant when 'args' is in the 'keys' array.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true,
+      "examples": [
+        ["email", "template"],
+        ["user_id"]
+      ]
+    },
+    "meta_keys": {
+      "title": "Metadata Keys",
+      "description": "Top-level keys within 'meta' to include in the uniqueness fingerprint. REQUIRED when 'meta' is in the 'keys' array. Must be non-empty.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true,
+      "minItems": 1,
+      "examples": [
+        ["tenant_id"],
+        ["user_id", "tenant_id"]
+      ]
+    },
+    "period": {
+      "title": "Uniqueness Period",
+      "description": "Duration for the uniqueness window, expressed as an ISO 8601 duration string. Calculated from existing job's 'created_at' timestamp. When null or omitted, the constraint remains active until the job transitions to a non-checked state.",
+      "type": "string",
+      "pattern": "^P(?:\\d+Y)?(?:\\d+M)?(?:\\d+W)?(?:\\d+D)?(?:T(?:\\d+H)?(?:\\d+M)?(?:\\d+(?:\\.\\d+)?S)?)?$",
+      "examples": ["PT5M", "PT1H", "P1D", "P7D", "P30D"]
+    },
+    "states": {
+      "title": "States to Check",
+      "description": "Job lifecycle states to check for existing duplicates. Default includes all non-terminal states.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "scheduled",
+          "available",
+          "pending",
+          "active",
+          "completed",
+          "retryable",
+          "cancelled",
+          "discarded"
+        ]
+      },
+      "uniqueItems": true,
+      "default": ["available", "active", "scheduled", "retryable", "pending"],
+      "examples": [
+        ["available", "active", "scheduled", "retryable", "pending"],
+        ["available", "active"],
+        ["available", "active", "completed"]
+      ]
+    },
+    "on_conflict": {
+      "title": "Conflict Resolution Strategy",
+      "description": "Strategy when a duplicate job is detected. 'reject' returns a conflict error. 'replace' cancels the existing job and enqueues the new one. 'replace_except_schedule' replaces args/meta but preserves scheduled_at. 'ignore' silently discards the new job. Default is 'reject'.",
+      "type": "string",
+      "enum": ["reject", "replace", "replace_except_schedule", "ignore"],
+      "default": "reject",
+      "examples": ["reject", "replace", "ignore"]
+    }
+  },
+  "additionalProperties": false,
+  "if": {
+    "properties": {
+      "keys": {
+        "contains": {
+          "const": "meta"
+        }
+      }
+    }
+  },
+  "then": {
+    "required": ["meta_keys"]
+  },
+  "examples": [
+    {
+      "keys": ["type", "args"],
+      "period": "PT1H",
+      "on_conflict": "reject"
+    },
+    {
+      "keys": ["type", "queue", "args"],
+      "args_keys": ["user_id"],
+      "states": ["available", "active", "scheduled"],
+      "on_conflict": "replace"
+    },
+    {
+      "keys": ["type", "meta"],
+      "meta_keys": ["tenant_id"],
+      "period": "P1D",
+      "on_conflict": "ignore"
+    }
+  ]
+}

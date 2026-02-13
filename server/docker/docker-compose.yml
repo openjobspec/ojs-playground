@@ -1,0 +1,47 @@
+version: "3.8"
+
+services:
+  playground:
+    build:
+      context: ../..
+      dockerfile: server/Dockerfile
+    ports:
+      - "4200:4200"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgres://ojs:ojs@postgres:5432/ojs?sslmode=disable
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    command: ["dev", "--backend", "memory", "--no-scan", "--open=false"]
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ojs
+      POSTGRES_PASSWORD: ojs
+      POSTGRES_DB: ojs
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ojs"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

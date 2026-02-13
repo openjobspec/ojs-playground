@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openjobspec.org/schemas/v1/retry-policy.json",
+  "title": "OJS Retry Policy",
+  "description": "Retry policy for an OJS job, controlling behavior when execution fails. Defines backoff strategy, maximum attempts, jitter, and non-retryable error classification.",
+  "type": "object",
+  "properties": {
+    "max_attempts": {
+      "title": "Maximum Attempts",
+      "description": "Total number of attempts including the initial execution. A value of 0 disables retry entirely. A value of 1 means run once with no retry. Default is 3.",
+      "type": "integer",
+      "minimum": 0,
+      "default": 3,
+      "examples": [0, 1, 3, 5, 10]
+    },
+    "initial_interval": {
+      "title": "Initial Retry Interval",
+      "description": "Delay before the first retry, expressed as an ISO 8601 duration string. MUST be greater than zero. Default is 'PT1S' (1 second).",
+      "type": "string",
+      "pattern": "^P(?:\\d+Y)?(?:\\d+M)?(?:\\d+W)?(?:\\d+D)?(?:T(?:\\d+H)?(?:\\d+M)?(?:\\d+(?:\\.\\d+)?S)?)?$",
+      "default": "PT1S",
+      "examples": ["PT0.5S", "PT1S", "PT5S", "PT30S", "PT5M", "PT1H"]
+    },
+    "backoff_coefficient": {
+      "title": "Backoff Coefficient",
+      "description": "Multiplier applied to the retry interval after each successive failure. MUST be >= 1.0. With exponential backoff (default), delay(n) = initial_interval * backoff_coefficient^(n-1). Default is 2.0.",
+      "type": "number",
+      "minimum": 1.0,
+      "default": 2.0,
+      "examples": [1.0, 1.5, 2.0, 3.0]
+    },
+    "max_interval": {
+      "title": "Maximum Retry Interval",
+      "description": "Maximum cap on computed backoff delay, expressed as an ISO 8601 duration string. MUST be >= initial_interval. Default is 'PT5M' (5 minutes).",
+      "type": "string",
+      "pattern": "^P(?:\\d+Y)?(?:\\d+M)?(?:\\d+W)?(?:\\d+D)?(?:T(?:\\d+H)?(?:\\d+M)?(?:\\d+(?:\\.\\d+)?S)?)?$",
+      "default": "PT5M",
+      "examples": ["PT30S", "PT1M", "PT5M", "PT1H", "PT24H"]
+    },
+    "jitter": {
+      "title": "Jitter Enabled",
+      "description": "Whether to add randomness (±50%) to computed delays to prevent thundering herd problems. When true, jittered_delay = effective_delay * random(0.5, 1.5). Default is true.",
+      "type": "boolean",
+      "default": true,
+      "examples": [true, false]
+    },
+    "non_retryable_errors": {
+      "title": "Non-Retryable Error Types",
+      "description": "Array of error type strings that bypass retry and cause the job to transition directly to 'discarded'. Supports exact matching and prefix wildcard matching (e.g., 'auth.*').",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true,
+      "default": [],
+      "examples": [
+        ["ValidationError", "AuthenticationError"],
+        ["auth.*", "billing.card_declined"]
+      ]
+    },
+    "on_exhaustion": {
+      "title": "Exhaustion Action",
+      "description": "Action to take when max_attempts is exhausted. 'discard' permanently discards the job. 'dead_letter' moves it to the dead letter queue for manual inspection. Default is 'discard'.",
+      "type": "string",
+      "enum": ["discard", "dead_letter"],
+      "default": "discard",
+      "examples": ["discard", "dead_letter"]
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "max_attempts": 3,
+      "initial_interval": "PT1S",
+      "backoff_coefficient": 2.0,
+      "max_interval": "PT5M",
+      "jitter": true,
+      "non_retryable_errors": [],
+      "on_exhaustion": "discard"
+    },
+    {
+      "max_attempts": 5,
+      "initial_interval": "PT5S",
+      "backoff_coefficient": 2.0,
+      "max_interval": "PT1H",
+      "jitter": true,
+      "non_retryable_errors": ["ValidationError", "AuthenticationError"],
+      "on_exhaustion": "dead_letter"
+    },
+    {
+      "max_attempts": 1
+    }
+  ]
+}
