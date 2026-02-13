@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openjobspec.org/schemas/v1/error.json",
+  "title": "OJS Error",
+  "description": "Structured error object for OJS job failures. Used when a job handler fails to report diagnostic information across language boundaries.",
+  "type": "object",
+  "required": ["type", "message"],
+  "properties": {
+    "type": {
+      "title": "Error Type",
+      "description": "The error type or class name. SHOULD be the language-specific exception class name (e.g., 'RuntimeError', 'NullPointerException') or a domain-specific error code (e.g., 'SmtpConnectionRefused').",
+      "type": "string",
+      "minLength": 1,
+      "examples": ["RuntimeError", "SmtpConnectionError", "ValidationError", "TimeoutError"]
+    },
+    "message": {
+      "title": "Error Message",
+      "description": "A human-readable description of the error. SHOULD be the exception message or a descriptive string.",
+      "type": "string",
+      "minLength": 1,
+      "examples": [
+        "Connection refused to smtp.example.com:587 after 30s timeout",
+        "Division by zero",
+        "Invalid email address format"
+      ]
+    },
+    "backtrace": {
+      "title": "Stack Trace",
+      "description": "The stack trace at the point of failure, represented as an array of frame strings. Each string represents one stack frame. Implementations SHOULD limit to at most 50 frames and 10,000 total characters.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 50,
+      "examples": [
+        [
+          "at SmtpClient.connect (smtp.js:42:15)",
+          "at EmailSender.send (email_sender.js:18:22)",
+          "at handler (handlers/email.send.js:7:10)"
+        ]
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "type": "SmtpConnectionError",
+      "message": "Connection refused to smtp.example.com:587 after 30s timeout",
+      "backtrace": [
+        "at SmtpClient.connect (smtp.js:42:15)",
+        "at EmailSender.send (email_sender.js:18:22)",
+        "at handler (handlers/email.send.js:7:10)"
+      ]
+    },
+    {
+      "type": "ValidationError",
+      "message": "Invalid email address format"
+    }
+  ]
+}

@@ -1,0 +1,233 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openjobspec.org/schemas/v1/job.json",
+  "title": "OJS Job Envelope",
+  "description": "The core data structure of the Open Job Spec. Contains all attributes necessary to identify, configure, route, execute, and track a background job. Attributes are organized into required, optional, and system-managed categories.",
+  "type": "object",
+  "required": ["specversion", "id", "type", "queue", "args"],
+  "properties": {
+    "specversion": {
+      "title": "Spec Version",
+      "description": "The version of the OJS Core Specification that the job envelope conforms to. MUST be a valid Semantic Versioning 2.0.0 string.",
+      "type": "string",
+      "const": "1.0.0-rc.1",
+      "examples": ["1.0.0-rc.1"]
+    },
+    "id": {
+      "title": "Job ID",
+      "description": "A globally unique identifier for the job. MUST be a UUIDv7 formatted as a lowercase hexadecimal string with hyphens in the standard 8-4-4-4-12 format.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "examples": [
+        "019461a8-1a2b-7c3d-8e4f-5a6b7c8d9e0f",
+        "019461a8-2b3c-7d4e-9f50-6a7b8c9d0e1f"
+      ]
+    },
+    "type": {
+      "title": "Job Type",
+      "description": "The job type, used to route the job to the appropriate handler. MUST use a dot-separated namespace convention. Each segment MUST match [a-z][a-z0-9_]* (lowercase alphanumeric with underscores, starting with a letter).",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$",
+      "minLength": 1,
+      "maxLength": 255,
+      "examples": ["email.send", "report.generate", "data.etl.transform", "billing.invoice.generate"]
+    },
+    "queue": {
+      "title": "Target Queue",
+      "description": "The target queue for the job. MUST be lowercase alphanumeric with hyphens and dots, starting with an alphanumeric character. Maximum 128 characters. Default is 'default'.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9\\-\\.]*$",
+      "maxLength": 128,
+      "default": "default",
+      "examples": ["default", "email", "reports", "high-priority"]
+    },
+    "args": {
+      "title": "Job Arguments",
+      "description": "Positional arguments for the job handler. MUST be a JSON array where each element is a JSON-native type (string, number, boolean, null, array, or object). Language-specific serialization formats MUST NOT be used.",
+      "type": "array",
+      "items": true,
+      "examples": [
+        ["user@example.com", "welcome"],
+        [42, "quarterly", {"include_charts": true}],
+        []
+      ]
+    },
+    "meta": {
+      "title": "Metadata",
+      "description": "Extensible key-value metadata for cross-cutting concerns such as tracing, locale, tenant identity, and correlation. Implementations MUST preserve all key-value pairs without modification.",
+      "type": "object",
+      "additionalProperties": true,
+      "default": {},
+      "examples": [
+        {
+          "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+          "user_id": "usr_12345",
+          "tenant_id": "tenant_acme",
+          "locale": "en-US"
+        },
+        {}
+      ]
+    },
+    "priority": {
+      "title": "Priority",
+      "description": "Job priority within a queue. Higher numbers indicate higher priority. Named levels: HIGH=10, NORMAL=0, LOW=-10.",
+      "type": "integer",
+      "default": 0,
+      "examples": [-10, 0, 10]
+    },
+    "timeout": {
+      "title": "Execution Timeout",
+      "description": "Maximum execution time for the job in seconds. If exceeded, the implementation MUST treat it as a failure with error type 'timeout'. A value of 0 means no timeout.",
+      "type": "integer",
+      "minimum": 0,
+      "examples": [30, 60, 300, 1800]
+    },
+    "scheduled_at": {
+      "title": "Scheduled At",
+      "description": "The earliest time at which the job should be executed. MUST be an ISO 8601 / RFC 3339 timestamp with timezone designator. If set to a future time, the job enters the 'scheduled' state.",
+      "type": "string",
+      "format": "date-time",
+      "examples": ["2026-03-15T09:30:00Z", "2026-03-15T09:30:00+02:00"]
+    },
+    "expires_at": {
+      "title": "Expires At",
+      "description": "The deadline after which the job should be discarded if it has not yet started execution. MUST be an ISO 8601 / RFC 3339 timestamp with timezone designator.",
+      "type": "string",
+      "format": "date-time",
+      "examples": ["2026-03-15T18:00:00Z"]
+    },
+    "retry": {
+      "title": "Retry Policy",
+      "description": "Retry policy for the job, controlling behavior when execution fails.",
+      "$ref": "https://openjobspec.org/schemas/v1/retry-policy.json"
+    },
+    "unique": {
+      "title": "Unique Policy",
+      "description": "Uniqueness policy for deduplication, preventing duplicate jobs.",
+      "$ref": "https://openjobspec.org/schemas/v1/unique-policy.json"
+    },
+    "schema": {
+      "title": "Schema URI",
+      "description": "URI referencing a schema that the 'args' array conforms to. Recommended format: 'urn:ojs:schema:{job_type}:v{version}'.",
+      "type": "string",
+      "format": "uri",
+      "examples": ["urn:ojs:schema:email.send:v1", "urn:ojs:schema:report.generate:v2"]
+    },
+    "state": {
+      "title": "Lifecycle State",
+      "description": "The current lifecycle state of the job. System-managed: set by the implementation on every state transition.",
+      "type": "string",
+      "enum": [
+        "scheduled",
+        "available",
+        "pending",
+        "active",
+        "completed",
+        "retryable",
+        "cancelled",
+        "discarded"
+      ],
+      "examples": ["available", "active", "completed"]
+    },
+    "attempt": {
+      "title": "Attempt Number",
+      "description": "The current attempt number for the job. 1-indexed: the first execution is attempt 1. A job that has never been executed has attempt 0. System-managed.",
+      "type": "integer",
+      "minimum": 0,
+      "examples": [0, 1, 2, 3]
+    },
+    "created_at": {
+      "title": "Created At",
+      "description": "The timestamp when the job was created (received by the backend). System-managed. MUST be an ISO 8601 / RFC 3339 timestamp with timezone.",
+      "type": "string",
+      "format": "date-time",
+      "examples": ["2026-02-12T10:30:00.000Z"]
+    },
+    "enqueued_at": {
+      "title": "Enqueued At",
+      "description": "The timestamp when the job entered the 'available' state. For immediately available jobs, this equals created_at. System-managed.",
+      "type": "string",
+      "format": "date-time",
+      "examples": ["2026-02-12T10:30:00.000Z"]
+    },
+    "started_at": {
+      "title": "Started At",
+      "description": "The timestamp when the job most recently entered the 'active' state. Updated on each attempt. System-managed.",
+      "type": "string",
+      "format": "date-time",
+      "examples": ["2026-02-12T10:30:01.456Z"]
+    },
+    "completed_at": {
+      "title": "Completed At",
+      "description": "The timestamp when the job reached a terminal state ('completed' or 'discarded'). System-managed.",
+      "type": "string",
+      "format": "date-time",
+      "examples": ["2026-02-12T10:30:02.789Z"]
+    },
+    "error": {
+      "title": "Last Error",
+      "description": "Information about the most recent error. Set when a job fails and cleared when it succeeds. System-managed.",
+      "$ref": "https://openjobspec.org/schemas/v1/error.json"
+    },
+    "result": {
+      "title": "Job Result",
+      "description": "The return value of the job handler upon successful completion. MUST be a JSON-native value. System-managed.",
+      "examples": [
+        {"message_id": "msg_abc123", "delivered": true},
+        42,
+        "success",
+        null
+      ]
+    }
+  },
+  "additionalProperties": true,
+  "examples": [
+    {
+      "specversion": "1.0.0-rc.1",
+      "id": "019461a8-1a2b-7c3d-8e4f-5a6b7c8d9e0f",
+      "type": "email.send",
+      "queue": "default",
+      "args": ["user@example.com", "welcome"]
+    },
+    {
+      "specversion": "1.0.0-rc.1",
+      "id": "019461a8-2b3c-7d4e-9f50-6a7b8c9d0e1f",
+      "type": "report.generate",
+      "queue": "reports",
+      "args": [42, "quarterly", {"include_charts": true}],
+      "meta": {
+        "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+        "user_id": "usr_12345"
+      },
+      "priority": 10,
+      "timeout": 300,
+      "scheduled_at": "2026-03-01T09:00:00Z",
+      "expires_at": "2026-03-01T18:00:00Z",
+      "retry": {
+        "max_attempts": 5,
+        "initial_interval": "PT1S",
+        "backoff_coefficient": 2.0,
+        "max_interval": "PT5M",
+        "jitter": true,
+        "non_retryable_errors": ["ValidationError", "AuthenticationError"]
+      }
+    },
+    {
+      "specversion": "1.0.0-rc.1",
+      "id": "019461a8-3c4d-7e5f-a061-7b8c9d0e1f2a",
+      "type": "email.send",
+      "queue": "email",
+      "args": ["user@example.com", "welcome"],
+      "meta": {"trace_id": "abc123def456"},
+      "priority": 0,
+      "timeout": 30,
+      "state": "completed",
+      "attempt": 1,
+      "created_at": "2026-02-12T10:30:00.000Z",
+      "enqueued_at": "2026-02-12T10:30:00.000Z",
+      "started_at": "2026-02-12T10:30:01.456Z",
+      "completed_at": "2026-02-12T10:30:02.789Z",
+      "result": {"message_id": "msg_abc123", "delivered": true}
+    }
+  ]
+}
