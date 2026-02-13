@@ -1,0 +1,26 @@
+{
+  "name": "@openjobspec/playground",
+  "version": "0.1.0",
+  "description": "OJS Playground — interactive Open Job Spec environment",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/openjobspec/ojs-playground"
+  },
+  "bin": {
+    "ojs-playground": "bin/ojs-playground.js"
+  },
+  "keywords": [
+    "ojs",
+    "openjobspec",
+    "job-queue",
+    "playground",
+    "background-jobs"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "bin/"
+  ]
+}
