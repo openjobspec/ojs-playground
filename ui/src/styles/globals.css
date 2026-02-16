@@ -147,3 +147,15 @@
 .dark .code-highlight-flash {
   background-color: rgba(255, 213, 79, 0.15) !important;
 }
+
+/* Disable transitions and animations for users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .react-flow__edge.animated path {
+    animation: none !important;
+  }
+}

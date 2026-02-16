@@ -2,6 +2,7 @@ import { memo } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import type { JobState } from '@/engine/types'
 import { cn } from '@/lib/utils'
+import { useReducedMotion } from '@/hooks/useReducedMotion'
 
 interface StateMachineNodeData {
   label: string
@@ -28,12 +29,14 @@ export const StateMachineNode = memo(function StateMachineNode({
   data,
 }: NodeProps) {
   const { label, state, isActive, isTerminal, isSelected, isDimmed } = data as StateMachineNodeData
+  const reducedMotion = useReducedMotion()
   return (
     <div
       className={cn(
         'rounded-lg border-2 px-4 py-2 text-center text-sm font-medium text-white shadow-sm transition-all cursor-pointer',
         stateColorClasses[state],
-        isActive && 'ring-2 ring-ring ring-offset-2 ring-offset-background scale-110 animate-pulse',
+        isActive && 'ring-2 ring-ring ring-offset-2 ring-offset-background scale-110',
+        isActive && !reducedMotion && 'animate-pulse',
         isSelected && 'ring-2 ring-primary ring-offset-1',
         isTerminal && 'rounded-xl',
         isDimmed && 'opacity-30',
