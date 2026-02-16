@@ -138,3 +138,86 @@ describe('createSimulationStepper', () => {
     expect(stepper.totalSteps).toBe(stepper.result.events.length)
   })
 })
+
+describe('new simulation scenarios', () => {
+  it('timeout_execution: fails with TimeoutError, can retry', () => {
+    const result = runSimulation(makeConfig({
+      scenario: 'timeout_execution',
+      job: { ...DEFAULT_JOB, retry: { max_attempts: 3 } },
+    }))
+    const timeoutEvent = result.events.find((e) => e.error?.type === 'TimeoutError')
+    expect(timeoutEvent).toBeDefined()
+    expect(timeoutEvent!.label).toContain('Execution timeout')
+  })
+
+  it('timeout_heartbeat: fails with heartbeat timeout', () => {
+    const result = runSimulation(makeConfig({
+      scenario: 'timeout_heartbeat',
+      job: { ...DEFAULT_JOB, retry: { max_attempts: 2 } },
+    }))
+    const hbEvent = result.events.find((e) => e.label.includes('Heartbeat timeout'))
+    expect(hbEvent).toBeDefined()
+  })
+
+  it('progress_tracking: emits progress events', () => {
+    const result = runSimulation(makeConfig({
+      scenario: 'progress_tracking',
+      progressSteps: 4,
+    }))
+    expect(result.finalState).toBe('completed')
+    const progressEvents = result.events.filter((e) => e.progress !== undefined)
+    expect(progressEvents.length).toBe(4)
+    expect(progressEvents[progressEvents.length - 1]!.progress).toBe(1)
+  })
+
+  it('dead_letter: exhausted job marked as dead-lettered', () => {
+    const result = runSimulation(makeConfig({
+      scenario: 'dead_letter',
+      job: { ...DEFAULT_JOB, retry: { max_attempts: 2, on_exhaustion: 'dead_letter' } },
+    }))
+    expect(result.finalState).toBe('discarded')
+    const dlEvent = result.events.find((e) => e.deadLettered)
+    expect(dlEvent).toBeDefined()
+    expect(dlEvent!.label).toContain('dead letter')
+  })
+
+  it('backpressure_reject: rejects when queue full', () => {
+    const result = runSimulation(makeConfig({
+      scenario: 'backpressure_reject',
+      queueDepth: 100,
+      queueMaxSize: 50,
+    }))
+    expect(result.finalState).toBe('discarded')
+    const bpEvent = result.events.find((e) => e.backpressure === 'reject')
+    expect(bpEvent).toBeDefined()
+  })
+
+  it('backpressure_reject: allows when queue has space', () => {
+    const result = runSimulation(makeConfig({
+      scenario: 'backpressure_reject',
+      queueDepth: 10,
+      queueMaxSize: 50,
+    }))
+    expect(result.finalState).toBe('completed')
+  })
+
+  it('workflow_chain: processes steps sequentially', () => {
+    const result = runSimulation(makeConfig({
+      scenario: 'workflow_chain',
+      workflowSteps: ['step.a', 'step.b', 'step.c'],
+    }))
+    expect(result.finalState).toBe('completed')
+    const stepEvents = result.events.filter((e) => e.workflowStep)
+    expect(stepEvents.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('workflow_group: processes steps in parallel', () => {
+    const result = runSimulation(makeConfig({
+      scenario: 'workflow_group',
+      workflowSteps: ['step.x', 'step.y'],
+    }))
+    expect(result.finalState).toBe('completed')
+    const stepEvents = result.events.filter((e) => e.workflowStep)
+    expect(stepEvents.length).toBe(2)
+  })
+})

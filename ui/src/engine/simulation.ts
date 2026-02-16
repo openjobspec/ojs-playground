@@ -21,6 +21,9 @@ function getFailingAttempts(config: SimulationConfig): number[] {
 
   switch (config.scenario) {
     case 'success_first_attempt':
+    case 'progress_tracking':
+    case 'workflow_chain':
+    case 'workflow_group':
       return []
 
     case 'success_after_retries': {
@@ -33,7 +36,8 @@ function getFailingAttempts(config: SimulationConfig): number[] {
       return failures
     }
 
-    case 'exhausted': {
+    case 'exhausted':
+    case 'dead_letter': {
       // Fail on all attempts
       const all: number[] = []
       for (let i = 1; i <= policy.max_attempts; i++) {
@@ -51,12 +55,25 @@ function getFailingAttempts(config: SimulationConfig): number[] {
     case 'scheduled_then_success':
       return []
 
+    case 'timeout_execution':
+    case 'timeout_heartbeat':
+      return [config.timeoutOnAttempt ?? 1]
+
+    case 'backpressure_reject':
+      return []
+
     case 'custom':
       return config.failOnAttempts ?? [1]
   }
 }
 
-function makeError(attempt: number, nonRetryable: boolean): OJSError {
+function makeError(attempt: number, nonRetryable: boolean, timeout?: boolean): OJSError {
+  if (timeout) {
+    return {
+      type: 'TimeoutError',
+      message: `Execution timed out on attempt ${attempt}`,
+    }
+  }
   if (nonRetryable) {
     return {
       type: 'ValidationError',
@@ -68,6 +85,8 @@ function makeError(attempt: number, nonRetryable: boolean): OJSError {
     message: `Transient failure on attempt ${attempt}: connection timeout`,
   }
 }
+
+const PROGRESS_INTERVAL = 200 // ms between progress updates
 
 /**
  * Run a deterministic simulation of the OJS job lifecycle.
@@ -90,7 +109,7 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
   let currentState = 'initial' as JobState | 'initial'
   let retryIndex = 0
 
-  function addEvent(to: JobState, label: string, delay?: number, error?: OJSError) {
+  function addEvent(to: JobState, label: string, delay?: number, error?: OJSError, extra?: Partial<SimulationEvent>) {
     events.push({
       from: currentState,
       to,
@@ -99,8 +118,29 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
       delay,
       error,
       label,
+      ...extra,
     })
     currentState = to
+  }
+
+  // Backpressure check
+  if (config.scenario === 'backpressure_reject') {
+    const depth = config.queueDepth ?? 100
+    const maxSize = config.queueMaxSize ?? 50
+    if (depth >= maxSize) {
+      addEvent('discarded', `Queue full (${depth}/${maxSize}) — job rejected`, undefined, {
+        type: 'BackpressureError',
+        message: `Queue depth ${depth} exceeds max ${maxSize}`,
+      }, { backpressure: config.backpressureStrategy ?? 'reject' })
+      return {
+        events,
+        finalState: currentState as JobState,
+        totalDuration: time,
+        totalAttempts: attempt,
+        retryDelays: [],
+        retrySchedule: [],
+      }
+    }
   }
 
   // Step 1: Initial transition
@@ -114,6 +154,53 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
     addEvent('available', 'Job enqueued')
   }
 
+  // Workflow scenarios
+  if (config.scenario === 'workflow_chain' || config.scenario === 'workflow_group') {
+    const steps = config.workflowSteps ?? (config.job.meta?.steps as string[] | undefined) ?? ['step.1', 'step.2', 'step.3']
+    const isChain = config.scenario === 'workflow_chain'
+
+    if (isChain) {
+      for (const step of steps) {
+        time += FETCH_DELAY
+        attempt++
+        addEvent('active', `Chain step: ${step}`, undefined, undefined, { workflowStep: step })
+        time += PROCESSING_TIME
+        if (step !== steps[steps.length - 1]) {
+          addEvent('available', `Step ${step} completed, next step queued`, undefined, undefined, { workflowStep: step })
+        }
+      }
+      addEvent('completed', `Chain workflow completed (${steps.length} steps)`)
+    } else {
+      time += FETCH_DELAY
+      attempt++
+      addEvent('active', `Group: fan-out ${steps.length} parallel steps`)
+
+      for (const step of steps) {
+        time += PROCESSING_TIME / steps.length
+        events.push({
+          from: 'active',
+          to: 'active',
+          timestamp: time,
+          attempt,
+          label: `Group step: ${step} completed`,
+          workflowStep: step,
+          progress: (steps.indexOf(step) + 1) / steps.length,
+        })
+      }
+
+      addEvent('completed', `Group workflow completed (${steps.length} parallel steps)`)
+    }
+
+    return {
+      events,
+      finalState: currentState as JobState,
+      totalDuration: time,
+      totalAttempts: attempt,
+      retryDelays: [],
+      retrySchedule: [],
+    }
+  }
+
   // Step 2: Processing loop
   while (!TERMINAL_STATES.has(currentState as JobState)) {
     if (currentState === 'available') {
@@ -123,6 +210,26 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
     }
 
     if (currentState === 'active') {
+      // Progress tracking scenario
+      if (config.scenario === 'progress_tracking') {
+        const totalSteps = config.progressSteps ?? 5
+        for (let step = 1; step <= totalSteps; step++) {
+          time += PROGRESS_INTERVAL
+          const progress = step / totalSteps
+          events.push({
+            from: 'active',
+            to: 'active',
+            timestamp: time,
+            attempt,
+            label: `Progress: ${Math.round(progress * 100)}%`,
+            progress,
+            progressMessage: step === totalSteps ? 'Processing complete' : `Processing step ${step}/${totalSteps}`,
+          })
+        }
+        addEvent('completed', `Job completed with progress tracking (${totalSteps} steps)`)
+        break
+      }
+
       time += PROCESSING_TIME
 
       // Check for cancellation
@@ -144,6 +251,33 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
         break
       }
 
+      // Check for timeout
+      if (
+        (config.scenario === 'timeout_execution' || config.scenario === 'timeout_heartbeat') &&
+        attempt === (config.timeoutOnAttempt ?? 1)
+      ) {
+        const error = makeError(attempt, false, true)
+        const label = config.scenario === 'timeout_heartbeat'
+          ? `Heartbeat timeout on attempt ${attempt}`
+          : `Execution timeout on attempt ${attempt}`
+
+        if (attempt < policy.max_attempts) {
+          addEvent('retryable', label, undefined, error)
+          const schedule = retrySchedule[retryIndex]
+          if (schedule) {
+            time += schedule.finalDelay
+            retryIndex++
+          } else {
+            time += parseDuration(policy.initial_interval)
+          }
+          addEvent('available', 'Backoff delay expires', retrySchedule[retryIndex - 1]?.finalDelay)
+        } else {
+          addEvent('discarded', `${label} (retries exhausted)`, undefined, error)
+          break
+        }
+        continue
+      }
+
       // Check if this attempt fails
       if (failSet.has(attempt)) {
         const error = makeError(attempt, false)
@@ -163,8 +297,13 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
 
           addEvent('available', `Backoff delay expires`, retrySchedule[retryIndex - 1]?.finalDelay)
         } else {
-          // Exhausted
-          addEvent('discarded', `Attempt ${attempt} failed (retries exhausted)`, undefined, error)
+          // Exhausted — dead letter or discard
+          const onExhaustion = config.job.retry?.on_exhaustion ?? 'discard'
+          if (config.scenario === 'dead_letter' || onExhaustion === 'dead_letter') {
+            addEvent('discarded', `Attempt ${attempt} failed — moved to dead letter queue`, undefined, error, { deadLettered: true })
+          } else {
+            addEvent('discarded', `Attempt ${attempt} failed (retries exhausted)`, undefined, error)
+          }
           break
         }
       } else {
@@ -183,6 +322,7 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
     totalDuration: time,
     totalAttempts: attempt,
     retryDelays,
+    retrySchedule,
   }
 }
 
