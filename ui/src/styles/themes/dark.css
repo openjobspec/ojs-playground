@@ -1,32 +1,32 @@
 /* Dark theme CSS custom properties — extracted from globals.css .dark */
 .dark {
-  --background: 240 10% 3.9%;
-  --foreground: 0 0% 98%;
-  --card: 240 10% 3.9%;
-  --card-foreground: 0 0% 98%;
-  --popover: 240 10% 3.9%;
-  --popover-foreground: 0 0% 98%;
-  --primary: 0 0% 98%;
-  --primary-foreground: 240 5.9% 10%;
-  --secondary: 240 3.7% 15.9%;
-  --secondary-foreground: 0 0% 98%;
-  --muted: 240 3.7% 15.9%;
-  --muted-foreground: 240 5% 64.9%;
-  --accent: 240 3.7% 15.9%;
-  --accent-foreground: 0 0% 98%;
-  --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 0 0% 98%;
-  --border: 240 3.7% 15.9%;
-  --input: 240 3.7% 15.9%;
-  --ring: 240 4.9% 83.9%;
+  --background: 224 47% 8%;
+  --foreground: 210 40% 98%;
+  --card: 224 47% 10%;
+  --card-foreground: 210 40% 98%;
+  --popover: 224 47% 10%;
+  --popover-foreground: 210 40% 98%;
+  --primary: 234 89% 68%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 222 47% 15%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 222 47% 15%;
+  --muted-foreground: 218 11% 60%;
+  --accent: 222 47% 15%;
+  --accent-foreground: 210 40% 98%;
+  --destructive: 0 62% 45%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 222 30% 18%;
+  --input: 222 30% 18%;
+  --ring: 234 89% 68%;
 
   /* OJS State Colors (Dark — slightly brighter) */
   --ojs-scheduled: 263 70% 73%;
   --ojs-available: 215 20% 70%;
   --ojs-pending: 38 92% 55%;
-  --ojs-active: 217 91% 65%;
-  --ojs-completed: 142 71% 50%;
+  --ojs-active: 234 89% 70%;
+  --ojs-completed: 152 60% 50%;
   --ojs-retryable: 24 94% 55%;
   --ojs-cancelled: 215 14% 50%;
-  --ojs-discarded: 0 84% 65%;
+  --ojs-discarded: 0 72% 62%;
 }
