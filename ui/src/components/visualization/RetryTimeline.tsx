@@ -6,6 +6,7 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
+  ErrorBar,
   ResponsiveContainer,
 } from 'recharts'
 import { useStore } from '@/store'
@@ -13,23 +14,54 @@ import { formatDuration } from '@/engine/duration'
 
 export function RetryTimeline() {
   const simulationResult = useStore((s) => s.simulationResult)
+  const baselineResult = useStore((s) => s.baselineResult)
 
   const data = useMemo(() => {
     if (!simulationResult) return []
 
+    const schedule = simulationResult.retrySchedule
+
     return simulationResult.events
+      .filter((e) => e.from !== 'initial')
+      .map((event, i) => {
+        // Find matching retry schedule entry for jitter range
+        const retryEntry = event.delay !== undefined
+          ? schedule.find((s) => Math.abs(s.finalDelay - event.delay!) < 1)
+          : undefined
+
+        return {
+          index: i,
+          time: event.timestamp,
+          state: event.to,
+          label: event.label,
+          delay: event.delay,
+          attempt: event.attempt,
+          isSuccess: event.to === 'completed',
+          isFail: event.to === 'retryable' || event.to === 'discarded',
+          progress: event.progress,
+          progressMessage: event.progressMessage,
+          deadLettered: event.deadLettered,
+          backpressure: event.backpressure,
+          workflowStep: event.workflowStep,
+          errorX: retryEntry && retryEntry.jitteredDelay !== retryEntry.cappedDelay
+            ? [retryEntry.cappedDelay * 0.5, retryEntry.cappedDelay * 0.5]
+            : [0, 0],
+        }
+      })
+  }, [simulationResult])
+
+  const baselineData = useMemo(() => {
+    if (!baselineResult) return []
+    return baselineResult.events
       .filter((e) => e.from !== 'initial')
       .map((event, i) => ({
         index: i,
         time: event.timestamp,
-        state: event.to,
-        label: event.label,
-        delay: event.delay,
         attempt: event.attempt,
         isSuccess: event.to === 'completed',
         isFail: event.to === 'retryable' || event.to === 'discarded',
       }))
-  }, [simulationResult])
+  }, [baselineResult])
 
   if (!simulationResult || data.length === 0) {
     return (
@@ -74,10 +106,24 @@ export function RetryTimeline() {
                     <div>Time: {formatDuration(d.time)}</div>
                     {d.delay && <div>Delay: {formatDuration(d.delay)}</div>}
                     <div>Attempt: {d.attempt}</div>
+                    {d.progress !== undefined && <div>Progress: {Math.round(d.progress * 100)}%</div>}
+                    {d.progressMessage && <div className="text-muted-foreground">{d.progressMessage}</div>}
+                    {d.deadLettered && <div className="text-orange-500">→ Dead Letter Queue</div>}
+                    {d.backpressure && <div className="text-orange-500">Backpressure: {d.backpressure}</div>}
+                    {d.workflowStep && <div>Step: {d.workflowStep}</div>}
                   </div>
                 )
               }}
             />
+            {/* Baseline overlay (faded) */}
+            {baselineData.length > 0 && (
+              <>
+                <Scatter data={baselineData.filter((d) => d.isSuccess)} fill="hsl(142, 71%, 45%)" opacity={0.25} name="Baseline" legendType="none" />
+                <Scatter data={baselineData.filter((d) => d.isFail)} fill="hsl(0, 84%, 60%)" opacity={0.25} name="Baseline Fail" legendType="none" />
+                <Scatter data={baselineData.filter((d) => !d.isSuccess && !d.isFail)} fill="hsl(var(--primary))" opacity={0.25} name="Baseline Trans" legendType="none" />
+              </>
+            )}
+            {/* Current results */}
             <Scatter
               data={data.filter((d) => d.isSuccess)}
               fill="hsl(142, 71%, 45%)"
@@ -87,12 +133,16 @@ export function RetryTimeline() {
               data={data.filter((d) => d.isFail)}
               fill="hsl(0, 84%, 60%)"
               name="Failure"
-            />
+            >
+              <ErrorBar dataKey="errorX" width={4} strokeWidth={1.5} stroke="hsl(0, 84%, 60%)" direction="x" />
+            </Scatter>
             <Scatter
               data={data.filter((d) => !d.isSuccess && !d.isFail)}
               fill="hsl(var(--primary))"
               name="Transition"
-            />
+            >
+              <ErrorBar dataKey="errorX" width={4} strokeWidth={1.5} stroke="hsl(var(--primary))" direction="x" />
+            </Scatter>
           </ScatterChart>
         </ResponsiveContainer>
       </div>

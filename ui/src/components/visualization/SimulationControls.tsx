@@ -8,7 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Play, Pause, SkipForward, RotateCcw } from 'lucide-react'
+import { Play, Pause, SkipForward, RotateCcw, Bookmark, BookmarkX } from 'lucide-react'
 import type { SimulationScenario, BackoffStrategy } from '@/engine/types'
 
 const scenarios: { value: SimulationScenario; label: string }[] = [
@@ -18,6 +18,13 @@ const scenarios: { value: SimulationScenario; label: string }[] = [
   { value: 'cancelled', label: 'Cancelled' },
   { value: 'non_retryable_error', label: 'Non-retryable error' },
   { value: 'scheduled_then_success', label: 'Scheduled → Success' },
+  { value: 'timeout_execution', label: 'Execution timeout' },
+  { value: 'timeout_heartbeat', label: 'Heartbeat timeout' },
+  { value: 'progress_tracking', label: 'Progress tracking' },
+  { value: 'dead_letter', label: 'Dead letter queue' },
+  { value: 'backpressure_reject', label: 'Backpressure (reject)' },
+  { value: 'workflow_chain', label: 'Workflow: Chain' },
+  { value: 'workflow_group', label: 'Workflow: Group' },
 ]
 
 const strategies: { value: BackoffStrategy; label: string }[] = [
@@ -43,6 +50,9 @@ export function SimulationControls() {
   const setStrategy = useStore((s) => s.setStrategy)
   const setSpeed = useStore((s) => s.setSpeed)
   const recompute = useStore((s) => s.recompute)
+  const simulationResult = useStore((s) => s.simulationResult)
+  const baselineResult = useStore((s) => s.baselineResult)
+  const setBaselineResult = useStore((s) => s.setBaselineResult)
 
   const handleScenarioChange = (value: string) => {
     setScenario(value as SimulationScenario)
@@ -80,6 +90,30 @@ export function SimulationControls() {
           <RotateCcw className="h-3 w-3" />
           Reset
         </Button>
+        {baselineResult ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => setBaselineResult(null)}
+            className="h-7 gap-1"
+            title="Clear baseline comparison"
+          >
+            <BookmarkX className="h-3 w-3" />
+            Clear
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setBaselineResult(simulationResult)}
+            className="h-7 gap-1"
+            disabled={!simulationResult}
+            title="Save current result as baseline for comparison"
+          >
+            <Bookmark className="h-3 w-3" />
+            Baseline
+          </Button>
+        )}
         <Select value={String(speed)} onValueChange={(v) => setSpeed(Number(v))}>
           <SelectTrigger className="h-7 w-16 text-xs">
             <SelectValue />

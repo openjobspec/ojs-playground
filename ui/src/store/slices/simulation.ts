@@ -10,6 +10,7 @@ export interface SimulationSlice {
   strategy: BackoffStrategy
   scenario: SimulationScenario
   simulationResult: SimulationResult | null
+  baselineResult: SimulationResult | null
   activeState: JobState | null
   activeEventIndex: number
   isSimulating: boolean
@@ -19,6 +20,7 @@ export interface SimulationSlice {
   setStrategy: (strategy: BackoffStrategy) => void
   setScenario: (scenario: SimulationScenario) => void
   setSimulationResult: (result: SimulationResult | null) => void
+  setBaselineResult: (result: SimulationResult | null) => void
   setActiveState: (state: JobState | null) => void
   setActiveEventIndex: (index: number) => void
   setIsSimulating: (simulating: boolean) => void
@@ -32,6 +34,7 @@ export const createSimulationSlice: StateCreator<SimulationSlice, [], [], Simula
   strategy: 'exponential',
   scenario: 'success_first_attempt',
   simulationResult: null,
+  baselineResult: null,
   activeState: null,
   activeEventIndex: -1,
   isSimulating: false,
@@ -41,6 +44,7 @@ export const createSimulationSlice: StateCreator<SimulationSlice, [], [], Simula
   setStrategy: (strategy) => set({ strategy }),
   setScenario: (scenario) => set({ scenario }),
   setSimulationResult: (result) => set({ simulationResult: result }),
+  setBaselineResult: (result) => set({ baselineResult: result }),
   setActiveState: (state) => set({ activeState: state }),
   setActiveEventIndex: (index) => set({ activeEventIndex: index }),
   setIsSimulating: (simulating) => set({ isSimulating: simulating }),
