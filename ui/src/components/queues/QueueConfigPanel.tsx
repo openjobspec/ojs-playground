@@ -58,12 +58,6 @@ const DEFAULT_QUEUES: QueueEntry[] = [
   },
 ]
 
-const stateColors: Record<string, string> = {
-  active: 'text-green-500',
-  paused: 'text-yellow-500',
-  draining: 'text-orange-500',
-}
-
 const stateBadgeVariant: Record<string, 'default' | 'secondary' | 'destructive'> = {
   active: 'default',
   paused: 'secondary',

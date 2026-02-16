@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Layers, ChevronUp, ChevronDown, RotateCcw } from 'lucide-react'
@@ -104,7 +103,6 @@ export function MiddlewarePanel() {
             // Onion model: nested layers
             <div className="space-y-0">
               {enabledMw.map((mw, i) => {
-                const depth = enabledMw.length - i
                 const paddingLeft = i * 12
                 const isInner = i === enabledMw.length - 1
                 return (

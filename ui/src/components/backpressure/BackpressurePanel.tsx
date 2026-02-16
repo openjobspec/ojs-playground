@@ -7,7 +7,7 @@ import { Progress } from '@/components/ui/progress'
 import { runSimulation } from '@/engine/simulation'
 import { DEFAULT_JOB } from '@/engine/constants'
 import { simulateRateLimitBatch, RATE_LIMIT_PRESETS } from '@/engine/ratelimit'
-import type { SimulationResult, BackoffStrategy, RateLimitPolicy } from '@/engine/types'
+import type { SimulationResult, BackoffStrategy } from '@/engine/types'
 import { Gauge, AlertTriangle, ShieldCheck, ShieldAlert, Timer } from 'lucide-react'
 
 type BackpressureStrategy = 'reject' | 'block' | 'drop_oldest'

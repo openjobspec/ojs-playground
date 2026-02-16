@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '@/store'
 import { JOB_TEMPLATES, TEMPLATE_CATEGORIES, type TemplateCategory } from '@/engine/templates'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'

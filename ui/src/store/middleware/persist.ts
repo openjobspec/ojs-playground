@@ -1,4 +1,4 @@
-import type { StateCreator, StoreMutatorIdentifier } from 'zustand'
+import type { StateCreator } from 'zustand'
 
 type PersistConfig = {
   name: string

@@ -17,7 +17,6 @@ export function VisualizationPanel() {
   const [vizTab, setVizTab] = useState<'lifecycle' | 'dag'>('lifecycle')
   const [bottomTab, setBottomTab] = useState<'timeline' | 'controls'>('timeline')
   const [announcement, setAnnouncement] = useState('')
-  const activeState = useStore((s) => s.activeState)
   const activeEventIndex = useStore((s) => s.activeEventIndex)
   const simulationResult = useStore((s) => s.simulationResult)
 
