@@ -1,5 +1,7 @@
 # OJS Playground
 
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+
 Interactive development environment for the [Open Job Spec](https://openjobspec.org) standard. Define jobs, visualize lifecycle state machines, simulate retry behavior, compare backends, and generate SDK code — all in the browser.
 
 ## Quick Start
