@@ -43,8 +43,8 @@ function parseWorkflow(meta: Record<string, unknown> | undefined): WorkflowGraph
   if (workflowType === 'group' || workflowType === 'batch') {
     // Fan-out/fan-in: first step → parallel middle → last step
     const isGroup = steps.length > 2
-    const firstStep = steps[0]
-    const lastStep = steps[steps.length - 1]
+    const firstStep = steps[0]!
+    const lastStep = steps[steps.length - 1]!
     const parallel = steps.slice(1, -1)
 
     const nodes: WorkflowStep[] = [

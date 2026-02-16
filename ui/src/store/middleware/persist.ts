@@ -37,8 +37,8 @@ export function createPersistMiddleware<T>(config: PersistConfig) {
       }
 
       // Subscribe to save on changes
-      const originalSet: typeof set = (partial, replace) => {
-        set(partial, replace)
+      const originalSet: typeof set = (partial, replace?) => {
+        set(partial, replace as false | undefined)
         try {
           const state = get() as Record<string, unknown>
           const toSave: Record<string, unknown> = {}

@@ -68,7 +68,7 @@ export function RetryControls() {
           min={0}
           max={100}
           step={1}
-          onValueChange={([v]) => handleChange({ initial_interval: toIsoDuration(sliderToMs(v)) })}
+          onValueChange={([v]) => handleChange({ initial_interval: toIsoDuration(sliderToMs(v!)) })}
         />
       </div>
 
@@ -82,7 +82,7 @@ export function RetryControls() {
           min={0}
           max={100}
           step={1}
-          onValueChange={([v]) => handleChange({ max_interval: toIsoDuration(sliderToMs(v)) })}
+          onValueChange={([v]) => handleChange({ max_interval: toIsoDuration(sliderToMs(v!)) })}
         />
       </div>
 
@@ -96,7 +96,7 @@ export function RetryControls() {
           min={10}
           max={100}
           step={1}
-          onValueChange={([v]) => handleChange({ backoff_coefficient: Math.round(v) / 10 })}
+          onValueChange={([v]) => handleChange({ backoff_coefficient: Math.round(v!) / 10 })}
         />
       </div>
 

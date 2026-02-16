@@ -57,7 +57,7 @@ export function CodeOutput() {
 
     const ids = editor.deltaDecorations([], decorations)
     // Remove flash after animation
-    setTimeout(() => editor.deltaDecorations(ids, []), 1500)
+    setTimeout(() => editor?.deltaDecorations?.(ids, []), 1500)
   }, [generatedCode])
 
   if (!generatedCode) {

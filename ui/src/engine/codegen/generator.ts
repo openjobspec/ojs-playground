@@ -171,7 +171,7 @@ function generateJsEnqueue(job: OJSJob): string {
   if (job.queue !== 'default') options.push(`  queue: '${job.queue}',`)
   if (job.retry) options.push(`  retry: ${jsRetryLiteral(job.retry as Record<string, unknown>)},`)
   if (job.priority !== undefined && job.priority !== 0) options.push(`  priority: ${job.priority},`)
-  if (job.timeout !== undefined && job.timeout > 0) options.push(`  timeout: ${job.timeout * 1000},`)
+  if (typeof job.timeout === 'number' && job.timeout > 0) options.push(`  timeout: ${job.timeout * 1000},`)
 
   const optionsArg = options.length > 0 ? `,\n{\n${options.join('\n')}\n}` : ''
 
