@@ -14,7 +14,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Check, X, Minus, Lightbulb } from 'lucide-react'
+import { Check, X, Minus, Lightbulb, FileDown } from 'lucide-react'
+import { toast } from 'sonner'
 
 const ALL_BACKENDS: BackendType[] = ['redis', 'postgres', 'kafka', 'sqs', 'nats']
 
@@ -44,10 +45,25 @@ export function ComparisonPanel() {
     return Array.from(allFeatures)
   }, [selectedBackends])
 
+  const exportMarkdown = () => {
+    const statusIcon = (s: string) => s === 'supported' ? '✅' : s === 'partial' ? '⚠️' : '❌'
+    const header = `| Feature | ${selectedBackends.map((b) => BACKEND_DATA[b].name).join(' | ')} |`
+    const sep = `|---------|${selectedBackends.map(() => '---').join('|')}|`
+    const rows = featureNames.map((f) =>
+      `| ${f} | ${selectedBackends.map((b) => statusIcon(BACKEND_DATA[b].features[f] ?? 'unsupported')).join(' | ')} |`
+    )
+    const md = `## OJS Backend Comparison\n\n${header}\n${sep}\n${rows.join('\n')}\n`
+    navigator.clipboard.writeText(md)
+    toast.success('Markdown copied to clipboard')
+  }
+
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-10 items-center border-b px-3">
+      <div className="flex h-10 items-center justify-between border-b px-3">
         <span className="text-sm font-medium">Backend Comparison</span>
+        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={exportMarkdown} title="Export as Markdown">
+          <FileDown className="h-3.5 w-3.5" />
+        </Button>
       </div>
 
       <div className="flex flex-wrap gap-1.5 border-b p-2">
