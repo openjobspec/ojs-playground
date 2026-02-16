@@ -1,5 +1,6 @@
 import { useStore } from '@/store'
 import { DEFAULT_JOB_JSON } from '@/engine/constants'
+import { checkPayloadSize, formatBytes } from '@/engine/payload'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -9,6 +10,7 @@ import {
 import { RotateCcw, AlignLeft } from 'lucide-react'
 import { toast } from 'sonner'
 import YAML from 'yaml'
+import { useMemo } from 'react'
 
 export function EditorToolbar() {
   const editorMode = useStore((s) => s.editorMode)
@@ -16,6 +18,8 @@ export function EditorToolbar() {
   const validationResult = useStore((s) => s.validationResult)
   const initFromContent = useStore((s) => s.initFromContent)
   const editorContent = useStore((s) => s.editorContent)
+
+  const payloadSize = useMemo(() => checkPayloadSize(editorContent), [editorContent])
 
   const handleFormat = () => {
     try {
@@ -57,6 +61,9 @@ export function EditorToolbar() {
     initFromContent(DEFAULT_JOB_JSON)
   }
 
+  const hasPayloadErrors = payloadSize.violations.some((v) => v.severity === 'error')
+  const hasPayloadWarnings = payloadSize.violations.some((v) => v.severity === 'warning')
+
   return (
     <div className="flex h-10 items-center justify-between border-b px-3">
       <div className="flex items-center gap-2">
@@ -77,6 +84,17 @@ export function EditorToolbar() {
       </div>
 
       <div className="flex items-center gap-1.5">
+        <Badge
+          variant={hasPayloadErrors ? 'destructive' : hasPayloadWarnings ? 'secondary' : 'outline'}
+          className="h-5 text-[10px] font-mono"
+          title={
+            payloadSize.violations.length > 0
+              ? payloadSize.violations.map((v) => `${v.field}: ${formatBytes(v.currentBytes)}/${formatBytes(v.limitBytes)}`).join(', ')
+              : `Envelope: ${formatBytes(payloadSize.totalBytes)} / 10 MB`
+          }
+        >
+          {formatBytes(payloadSize.totalBytes)}
+        </Badge>
         <Badge
           variant={validationResult.valid ? 'default' : 'destructive'}
           className="h-5 text-xs"
