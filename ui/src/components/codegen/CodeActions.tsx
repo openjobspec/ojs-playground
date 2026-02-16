@@ -2,6 +2,7 @@ import { useStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Copy, Download } from 'lucide-react'
 import { toast } from 'sonner'
+import { trackEvent } from '@/engine/analytics'
 
 const fileExtensions: Record<string, string> = {
   go: 'go',
@@ -29,6 +30,7 @@ export function CodeActions() {
     if (!generatedCode) return
     await navigator.clipboard.writeText(generatedCode)
     toast.success('Code copied to clipboard')
+    trackEvent('code_copied', { language })
   }
 
   const handleDownload = () => {
@@ -41,6 +43,7 @@ export function CodeActions() {
     a.download = `ojs-example.${ext}`
     a.click()
     URL.revokeObjectURL(url)
+    trackEvent('code_downloaded', { language })
   }
 
   return (

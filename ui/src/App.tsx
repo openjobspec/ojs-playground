@@ -11,6 +11,7 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useShare } from '@/hooks/useShare'
 import { useStore } from '@/store'
 import { DEFAULT_JOB_JSON } from '@/engine/constants'
+import { trackEvent } from '@/engine/analytics'
 
 function AppInner() {
   useTheme()
@@ -20,6 +21,8 @@ function AppInner() {
   const initFromContent = useStore((s) => s.initFromContent)
 
   useEffect(() => {
+    trackEvent('playground_loaded')
+
     // Check for embedded spec parameter
     const params = new URLSearchParams(window.location.search)
     const embeddedSpec = params.get('spec')
