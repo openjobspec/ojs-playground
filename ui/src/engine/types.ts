@@ -216,6 +216,7 @@ export interface ShareableState {
   scope?: 'enqueue' | 'worker' | 'full'
   scenario?: SimulationScenario
   strategy?: BackoffStrategy
+  tab?: string
 }
 
 // ---- Code Generation ----

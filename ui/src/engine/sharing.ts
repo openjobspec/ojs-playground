@@ -66,18 +66,22 @@ function generateShortId(): string {
 /**
  * Get the current shareable URL.
  * Falls back to localStorage-based short URL if compressed URL exceeds 2000 chars.
+ * Returns { url, isLocal } where isLocal indicates localStorage fallback.
  */
-export function getShareUrl(state: ShareableState): string {
+export function getShareUrl(state: ShareableState): { url: string; isLocal: boolean } {
   const hash = encodeState(state)
   const fullUrl = `${window.location.origin}${window.location.pathname}${hash}`
 
   if (fullUrl.length <= MAX_URL_LENGTH) {
-    return fullUrl
+    return { url: fullUrl, isLocal: false }
   }
 
   // Fallback: store in localStorage with short ID
   const shortId = generateShortId()
   localStorage.setItem(`ojs-share-${shortId}`, JSON.stringify(state))
   const shortHash = SHORT_PREFIX + shortId
-  return `${window.location.origin}${window.location.pathname}${shortHash}`
+  return {
+    url: `${window.location.origin}${window.location.pathname}${shortHash}`,
+    isLocal: true,
+  }
 }
