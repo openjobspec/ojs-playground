@@ -7,6 +7,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useStore } from '@/store'
+import { Code2, Play, Copy } from 'lucide-react'
 
 const ONBOARDING_KEY = 'ojs-playground-onboarded'
 
@@ -23,53 +24,48 @@ export function WelcomeOverlay() {
     setShowOnboarding(false)
   }
 
+  const steps = [
+    { icon: Code2, label: 'Edit', desc: 'Write your job spec on the left — autocomplete guides you' },
+    { icon: Play, label: 'Visualize', desc: 'Watch the state machine animate in the center panel' },
+    { icon: Copy, label: 'Generate', desc: 'Copy generated SDK code from the right panel' },
+  ]
+
   return (
     <Dialog open={showOnboarding && !hasSeenBefore} onOpenChange={(open) => !open && handleDismiss()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none">
-              <rect width="24" height="24" rx="4" fill="hsl(var(--primary))" />
-              <text
-                x="12"
-                y="16"
-                textAnchor="middle"
-                fontFamily="system-ui"
-                fontWeight="bold"
-                fontSize="10"
-                fill="hsl(var(--primary-foreground))"
-              >
-                OJS
-              </text>
-            </svg>
+          <DialogTitle className="flex items-center gap-2.5 text-xl">
+            <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-primary text-primary-foreground text-[11px] font-bold">
+              OJS
+            </div>
             Welcome to OJS Playground
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-sm leading-relaxed">
             Explore the Open Job Spec standard interactively. Everything runs
             in your browser — no backend required.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 text-sm text-muted-foreground">
-          <div className="flex gap-2">
-            <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">1</span>
-            <span>Edit the job spec on the left — autocomplete guides you</span>
-          </div>
-          <div className="flex gap-2">
-            <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">2</span>
-            <span>Watch the state machine animate in the center</span>
-          </div>
-          <div className="flex gap-2">
-            <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">3</span>
-            <span>Copy generated SDK code from the right panel</span>
-          </div>
+        <div className="space-y-3 mt-1">
+          {steps.map((step, i) => (
+            <div key={i} className="flex items-start gap-3 rounded-lg border border-border/60 p-3 bg-muted/30">
+              <div className="flex items-center justify-center h-8 w-8 rounded-md bg-primary/10 text-primary shrink-0">
+                <step.icon className="h-4 w-4" />
+              </div>
+              <div>
+                <div className="text-sm font-medium">{step.label}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">{step.desc}</div>
+              </div>
+            </div>
+          ))}
         </div>
 
-        <div className="mt-2 text-xs text-muted-foreground">
-          <kbd className="px-1 py-0.5 rounded bg-muted text-xs">Cmd+K</kbd>{' '}
-          for command palette &middot;{' '}
-          <kbd className="px-1 py-0.5 rounded bg-muted text-xs">Cmd+Enter</kbd>{' '}
-          to run simulation
+        <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+          <kbd className="px-1.5 py-0.5 rounded-md bg-muted text-[11px] font-mono border border-border/50">⌘K</kbd>
+          <span>Command palette</span>
+          <span className="text-border">·</span>
+          <kbd className="px-1.5 py-0.5 rounded-md bg-muted text-[11px] font-mono border border-border/50">⌘↵</kbd>
+          <span>Run simulation</span>
         </div>
 
         <Button onClick={handleDismiss} className="w-full mt-2">

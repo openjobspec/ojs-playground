@@ -6,8 +6,8 @@ import { VisualizationPanel } from '@/components/visualization/VisualizationPane
 import { CodegenPanel } from '@/components/codegen/CodegenPanel'
 import { ErrorBoundary } from './ErrorBoundary'
 import { useStore } from '@/store'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 
 const TemplatesPanel = lazy(() =>
   import('@/components/templates/TemplatesPanel').then((m) => ({ default: m.TemplatesPanel })),
@@ -98,29 +98,39 @@ export function Layout() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center border-b px-2 h-8">
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v)}>
-          <TabsList className="h-6">
-            <TabsTrigger value="code" className="h-5 px-2 text-[10px]">Code</TabsTrigger>
-            <TabsTrigger value="templates" className="h-5 px-2 text-[10px]">Templates</TabsTrigger>
-            <TabsTrigger value="comparison" className="h-5 px-2 text-[10px]">Backends</TabsTrigger>
-            <TabsTrigger value="conformance" className="h-5 px-2 text-[10px]">Levels</TabsTrigger>
-            <TabsTrigger value="tutorials" className="h-5 px-2 text-[10px]">Tutorials</TabsTrigger>
-            <TabsTrigger value="cron" className="h-5 px-2 text-[10px]">Cron</TabsTrigger>
-            <TabsTrigger value="dlq" className="h-5 px-2 text-[10px]">DLQ</TabsTrigger>
-            <TabsTrigger value="backpressure" className="h-5 px-2 text-[10px]">Backpressure</TabsTrigger>
-            <TabsTrigger value="queues" className="h-5 px-2 text-[10px]">Queues</TabsTrigger>
-            <TabsTrigger value="middleware" className="h-5 px-2 text-[10px]">Middleware</TabsTrigger>
-            {isLocalMode && (
-              <>
-                <TabsTrigger value="workers" className="h-5 px-2 text-[10px]">Workers</TabsTrigger>
-                <TabsTrigger value="chaos" className="h-5 px-2 text-[10px]">Chaos</TabsTrigger>
-                <TabsTrigger value="jobs" className="h-5 px-2 text-[10px]">Jobs</TabsTrigger>
-                <TabsTrigger value="test-runner" className="h-5 px-2 text-[10px]">Tests</TabsTrigger>
-              </>
+      <div className="flex items-center border-b px-2 h-9 gap-0.5 overflow-x-auto">
+        {(['code', 'templates', 'comparison', 'conformance', 'tutorials', 'cron', 'dlq', 'backpressure', 'queues', 'middleware'] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={cn(
+              'h-6 px-2.5 text-[11px] font-medium rounded-md whitespace-nowrap transition-colors',
+              activeTab === tab
+                ? 'bg-primary/10 text-primary'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
             )}
-          </TabsList>
-        </Tabs>
+          >
+            {tab === 'code' ? 'Code' : tab === 'dlq' ? 'DLQ' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+          </button>
+        ))}
+        {isLocalMode && (
+          <>
+            {(['workers', 'chaos', 'jobs', 'test-runner'] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={cn(
+                  'h-6 px-2.5 text-[11px] font-medium rounded-md whitespace-nowrap transition-colors',
+                  activeTab === tab
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                )}
+              >
+                {tab === 'test-runner' ? 'Tests' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              </button>
+            ))}
+          </>
+        )}
       </div>
       <div className="flex-1 min-h-0">
         <Allotment defaultSizes={[35, 40, 25]}>

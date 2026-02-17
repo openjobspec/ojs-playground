@@ -2,12 +2,14 @@ import { useTheme } from '@/hooks/useTheme'
 import { useShare } from '@/hooks/useShare'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Moon, Sun, Monitor, Share2 } from 'lucide-react'
+import { Moon, Sun, Monitor, Share2, Command } from 'lucide-react'
 import { toast } from 'sonner'
+import { useStore } from '@/store'
 
 export function TopBar() {
   const { theme, toggleTheme } = useTheme()
   const { copyShareUrl } = useShare()
+  const setCommandPaletteOpen = useStore((s) => s.setCommandPaletteOpen)
 
   const handleShare = async () => {
     try {
@@ -23,26 +25,15 @@ export function TopBar() {
   const ThemeIcon = theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor
 
   return (
-    <div className="flex h-11 items-center justify-between border-b bg-background px-4">
+    <div className="flex h-12 items-center justify-between border-b bg-background px-4">
       <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2">
-          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none">
-            <rect width="24" height="24" rx="4" fill="hsl(var(--primary))" />
-            <text
-              x="12"
-              y="16"
-              textAnchor="middle"
-              fontFamily="system-ui"
-              fontWeight="bold"
-              fontSize="10"
-              fill="hsl(var(--primary-foreground))"
-            >
-              OJS
-            </text>
-          </svg>
-          <span className="text-sm font-semibold">Playground</span>
+        <div className="flex items-center gap-2.5">
+          <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-primary text-primary-foreground text-[10px] font-bold">
+            OJS
+          </div>
+          <span className="text-sm font-semibold tracking-tight">Playground</span>
         </div>
-        <Badge variant="outline" className="h-5 text-[10px]">
+        <Badge variant="secondary" className="h-5 text-[10px] font-normal">
           Browser Mode
         </Badge>
       </div>
@@ -50,8 +41,17 @@ export function TopBar() {
       <div className="flex items-center gap-1">
         <Button
           variant="ghost"
-          size="icon"
-          className="h-8 w-8"
+          size="icon-sm"
+          className="text-muted-foreground hover:text-foreground"
+          onClick={() => setCommandPaletteOpen(true)}
+          title="Command palette (⌘K)"
+        >
+          <Command className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="text-muted-foreground hover:text-foreground"
           onClick={handleShare}
           title="Copy share URL"
         >
@@ -59,8 +59,8 @@ export function TopBar() {
         </Button>
         <Button
           variant="ghost"
-          size="icon"
-          className="h-8 w-8"
+          size="icon-sm"
+          className="text-muted-foreground hover:text-foreground"
           onClick={toggleTheme}
           title={`Theme: ${theme}`}
         >
