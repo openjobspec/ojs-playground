@@ -8,7 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Play, Pause, SkipForward, RotateCcw, Bookmark, BookmarkX } from 'lucide-react'
+import { Play, Pause, SkipForward, RotateCcw, Bookmark, BookmarkX, Volume2, VolumeX } from 'lucide-react'
 import type { SimulationScenario, BackoffStrategy } from '@/engine/types'
 
 const scenarios: { value: SimulationScenario; label: string }[] = [
@@ -53,6 +53,8 @@ export function SimulationControls() {
   const simulationResult = useStore((s) => s.simulationResult)
   const baselineResult = useStore((s) => s.baselineResult)
   const setBaselineResult = useStore((s) => s.setBaselineResult)
+  const soundEnabled = useStore((s) => s.soundEnabled)
+  const setSoundEnabled = useStore((s) => s.setSoundEnabled)
 
   const handleScenarioChange = (value: string) => {
     setScenario(value as SimulationScenario)
@@ -126,6 +128,15 @@ export function SimulationControls() {
             ))}
           </SelectContent>
         </Select>
+        <Button
+          size="sm"
+          variant={soundEnabled ? 'secondary' : 'ghost'}
+          onClick={() => setSoundEnabled(!soundEnabled)}
+          className="h-7 w-7 p-0"
+          title={soundEnabled ? 'Mute sounds' : 'Enable sounds'}
+        >
+          {soundEnabled ? <Volume2 className="h-3 w-3" /> : <VolumeX className="h-3 w-3" />}
+        </Button>
       </div>
       <div className="flex items-center gap-2">
         <Select value={scenario} onValueChange={handleScenarioChange}>

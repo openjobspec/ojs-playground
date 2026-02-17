@@ -1,5 +1,6 @@
 import { useCallback, useRef } from 'react'
 import { useStore } from '@/store'
+import { playTransitionSound, playSuccessSound, playFailureSound, playRetrySound } from '@/engine/sounds'
 
 export function useSimulation() {
   const {
@@ -7,6 +8,7 @@ export function useSimulation() {
     activeEventIndex,
     isSimulating,
     speed,
+    soundEnabled,
     setActiveState,
     setActiveEventIndex,
     setIsSimulating,
@@ -34,7 +36,15 @@ export function useSimulation() {
     const event = events[nextIndex]!
     setActiveEventIndex(nextIndex)
     setActiveState(event.to)
-  }, [simulationResult, activeEventIndex, setActiveEventIndex, setActiveState, stopPlayback])
+
+    // Play sound effects
+    if (soundEnabled) {
+      if (event.to === 'completed') playSuccessSound()
+      else if (event.to === 'discarded' || event.to === 'cancelled') playFailureSound()
+      else if (event.to === 'retryable') playRetrySound()
+      else playTransitionSound()
+    }
+  }, [simulationResult, activeEventIndex, setActiveEventIndex, setActiveState, stopPlayback, soundEnabled])
 
   const play = useCallback(() => {
     if (!simulationResult) return
