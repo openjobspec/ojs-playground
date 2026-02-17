@@ -48,7 +48,9 @@ func (h *ConformanceHandler) Run(w http.ResponseWriter, r *http.Request) {
 	h.runs[id] = run
 	h.mu.Unlock()
 
-	// TODO: Phase 6 will implement actual conformance test execution
+	// Conformance test execution is not yet implemented.
+	// This stub returns a placeholder result until the embedded runner is added.
+	// Track progress: https://github.com/openjobspec/ojs-playground/issues
 	go func() {
 		time.Sleep(100 * time.Millisecond)
 		h.mu.Lock()
@@ -59,7 +61,7 @@ func (h *ConformanceHandler) Run(w http.ResponseWriter, r *http.Request) {
 			"total":  0,
 			"passed": 0,
 			"failed": 0,
-			"message": "Conformance runner not yet implemented. See Phase 6.",
+			"message": "Conformance test execution is not yet available in the playground. Use the standalone ojs-conformance runner instead.",
 		}
 		h.mu.Unlock()
 	}()

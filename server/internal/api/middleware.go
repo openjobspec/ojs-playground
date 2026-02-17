@@ -35,7 +35,10 @@ func LoggerMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// CORSMiddleware adds permissive CORS headers for local development.
+// CORSMiddleware adds permissive CORS headers for the playground.
+// This is intentionally permissive (Allow-Origin: *) because the playground
+// is designed to run locally for interactive learning and experimentation.
+// Do NOT copy this pattern for production services.
 func CORSMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")

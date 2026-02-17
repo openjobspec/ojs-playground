@@ -2,6 +2,7 @@ package embed
 
 import (
 	"io/fs"
+	"log"
 	"net/http"
 	"strings"
 )
@@ -10,7 +11,7 @@ import (
 func SPAHandler() http.Handler {
 	distFS, err := fs.Sub(Dist, "dist")
 	if err != nil {
-		panic("embedded dist/ not found: " + err.Error())
+		log.Fatalf("embedded dist/ not found: %v", err)
 	}
 
 	fileServer := http.FileServer(http.FS(distFS))

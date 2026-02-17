@@ -18,8 +18,10 @@ RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /ojs-playground ./cmd/playground
 
 # Stage 3: Final image
 FROM alpine:3.19
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates && \
+    adduser -D -u 1001 ojs
 COPY --from=server-builder /ojs-playground /usr/local/bin/ojs-playground
+USER ojs
 EXPOSE 4200
 ENTRYPOINT ["ojs-playground"]
 CMD ["dev", "--no-scan", "--open=false"]
