@@ -60,15 +60,15 @@
   --ring: 234 89% 64%;
   --radius: 0.625rem;
 
-  /* OJS State Colors — vivid but not harsh */
-  --ojs-scheduled: 263 70% 68%;
-  --ojs-available: 215 20% 62%;
-  --ojs-pending: 38 92% 50%;
-  --ojs-active: 234 89% 64%;
-  --ojs-completed: 152 60% 45%;
-  --ojs-retryable: 24 94% 50%;
-  --ojs-cancelled: 215 14% 34%;
-  --ojs-discarded: 0 72% 55%;
+  /* OJS State Colors — vivid but not harsh, WCAG AA contrast with white text */
+  --ojs-scheduled: 263 70% 50%;
+  --ojs-available: 215 30% 45%;
+  --ojs-pending: 38 80% 40%;
+  --ojs-active: 234 70% 50%;
+  --ojs-completed: 152 60% 38%;
+  --ojs-retryable: 24 80% 42%;
+  --ojs-cancelled: 215 20% 30%;
+  --ojs-discarded: 0 65% 45%;
 }
 
 .dark {
