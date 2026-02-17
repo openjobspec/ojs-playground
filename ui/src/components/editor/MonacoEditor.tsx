@@ -3,6 +3,7 @@ import Editor, { type OnMount, type OnChange } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { useStore } from '@/store'
 import { useTheme } from '@/hooks/useTheme'
+import { findLineForPath } from '@/engine/validator'
 
 import jobSchema from '../../../public/schema/job.schema.json'
 import retrySchema from '../../../public/schema/retry-policy.schema.json'
@@ -79,16 +80,20 @@ export function MonacoEditor() {
     if (validationResult.valid) {
       monaco.editor.setModelMarkers(model, 'ojs', [])
     } else {
+      const source = model.getValue()
       const markers: editor.IMarkerData[] = validationResult.errors
         .filter((e) => e.keyword !== 'parse')
-        .map((err) => ({
-          severity: 8, // MarkerSeverity.Error
-          message: err.message,
-          startLineNumber: 1,
-          startColumn: 1,
-          endLineNumber: 1,
-          endColumn: 1,
-        }))
+        .map((err) => {
+          const line = findLineForPath(source, err.path)
+          return {
+            severity: 8, // MarkerSeverity.Error
+            message: err.message,
+            startLineNumber: line,
+            startColumn: 1,
+            endLineNumber: line,
+            endColumn: model.getLineMaxColumn(line),
+          }
+        })
       monaco.editor.setModelMarkers(model, 'ojs', markers)
     }
   }, [validationResult])
