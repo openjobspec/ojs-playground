@@ -1,8 +1,18 @@
+import { useState } from 'react'
 import { useStore } from '@/store'
 import { Button } from '@/components/ui/button'
-import { Copy, Download } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Copy, Download, Code2, FolderDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { trackEvent } from '@/engine/analytics'
+import { getEmbedSnippet } from '@/components/embed/EmbedLayout'
+import { downloadProjectAsScript } from '@/engine/project'
 
 const fileExtensions: Record<string, string> = {
   go: 'go',
@@ -25,6 +35,9 @@ const installCommands: Record<string, string> = {
 export function CodeActions() {
   const generatedCode = useStore((s) => s.generatedCode)
   const language = useStore((s) => s.language)
+  const editorContent = useStore((s) => s.editorContent)
+  const parsedJob = useStore((s) => s.parsedJob)
+  const [embedOpen, setEmbedOpen] = useState(false)
 
   const handleCopy = async () => {
     if (!generatedCode) return
@@ -44,6 +57,14 @@ export function CodeActions() {
     a.click()
     URL.revokeObjectURL(url)
     trackEvent('code_downloaded', { language })
+  }
+
+  const handleCopyQuickstart = async () => {
+    if (!generatedCode) return
+    const quickstart = `# Install\n$ ${installCommands[language]}\n\n# Code\n${generatedCode}`
+    await navigator.clipboard.writeText(quickstart)
+    toast.success('Quickstart copied (install + code)')
+    trackEvent('code_copied', { language, quickstart: true })
   }
 
   return (
@@ -70,11 +91,71 @@ export function CodeActions() {
           Download
         </Button>
       </div>
+      <Button
+        size="sm"
+        variant="default"
+        className="h-7 w-full gap-1 text-xs"
+        onClick={handleCopyQuickstart}
+        disabled={!generatedCode}
+      >
+        <Copy className="h-3 w-3" />
+        Copy Quickstart
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-7 w-full gap-1 text-xs"
+        onClick={() => {
+          if (parsedJob) {
+            downloadProjectAsScript(parsedJob, language)
+            trackEvent('code_downloaded', { language, project: true })
+            toast.success('Starter project downloaded')
+          }
+        }}
+        disabled={!parsedJob}
+      >
+        <FolderDown className="h-3 w-3" />
+        Download Project
+      </Button>
       <div className="rounded bg-muted px-2 py-1.5">
         <code className="text-[10px] text-muted-foreground">
           $ {installCommands[language]}
         </code>
       </div>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="h-6 w-full gap-1 text-[10px] text-muted-foreground"
+        onClick={() => setEmbedOpen(true)}
+      >
+        <Code2 className="h-3 w-3" />
+        Embed this playground
+      </Button>
+
+      <Dialog open={embedOpen} onOpenChange={setEmbedOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-sm">Embed Playground</DialogTitle>
+            <DialogDescription className="text-xs">
+              Copy this snippet to embed an interactive OJS Playground in your documentation.
+            </DialogDescription>
+          </DialogHeader>
+          <pre className="rounded bg-muted p-3 text-[10px] font-mono overflow-auto max-h-32 whitespace-pre-wrap">
+            {getEmbedSnippet(editorContent)}
+          </pre>
+          <Button
+            size="sm"
+            onClick={async () => {
+              await navigator.clipboard.writeText(getEmbedSnippet(editorContent))
+              toast.success('Embed snippet copied')
+              setEmbedOpen(false)
+            }}
+          >
+            <Copy className="h-3 w-3 mr-1" />
+            Copy Snippet
+          </Button>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
