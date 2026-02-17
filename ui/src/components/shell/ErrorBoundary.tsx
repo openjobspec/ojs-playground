@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 interface Props {
   children: ReactNode
   fallbackTitle?: string
+  resetKey?: string | number | boolean
 }
 
 interface State {
@@ -23,6 +24,12 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('ErrorBoundary caught:', error, errorInfo)
+  }
+
+  componentDidUpdate(prevProps: Props) {
+    if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
+      this.setState({ hasError: false, error: null })
+    }
   }
 
   render() {

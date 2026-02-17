@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, useState } from 'react'
 import { Allotment } from 'allotment'
 import 'allotment/dist/style.css'
 import { EditorPanel } from '@/components/editor/EditorPanel'
@@ -6,6 +6,7 @@ import { VisualizationPanel } from '@/components/visualization/VisualizationPane
 import { CodegenPanel } from '@/components/codegen/CodegenPanel'
 import { ErrorBoundary } from './ErrorBoundary'
 import { useStore } from '@/store'
+import { useMobile } from '@/hooks/useMobile'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
@@ -56,11 +57,15 @@ const LazyFallback = (
 )
 
 type RightTab = 'code' | 'templates' | 'comparison' | 'conformance' | 'tutorials' | 'cron' | 'dlq' | 'backpressure' | 'queues' | 'middleware' | 'workers' | 'chaos' | 'jobs' | 'test-runner'
+type MobilePanel = 'editor' | 'viz' | 'right'
 
 export function Layout() {
   const activeTab = useStore((s) => s.activeTab) as RightTab
   const setActiveTab = useStore((s) => s.setActiveTab)
   const isLocalMode = useStore((s) => s.isLocalMode)
+  const isValid = useStore((s) => s.validationResult.valid)
+  const isMobile = useMobile()
+  const [mobilePanel, setMobilePanel] = useState<MobilePanel>('editor')
 
   const renderRightPanel = () => {
     switch (activeTab) {
@@ -96,6 +101,56 @@ export function Layout() {
     }
   }
 
+  // Mobile: tabbed single-panel layout
+  if (isMobile) {
+    return (
+      <div className="flex h-full flex-col">
+        <div className="flex items-center border-b px-2 h-9 gap-0.5 shrink-0">
+          {(['editor', 'viz', 'right'] as const).map((panel) => (
+            <button
+              key={panel}
+              onClick={() => setMobilePanel(panel)}
+              className={cn(
+                'h-6 px-3 text-[11px] font-medium rounded-md whitespace-nowrap transition-colors',
+                mobilePanel === panel
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+              )}
+            >
+              {panel === 'editor' ? 'Editor' : panel === 'viz' ? 'Visualize' : 'Code'}
+            </button>
+          ))}
+        </div>
+        {mobilePanel === 'right' && (
+          <div className="flex items-center border-b px-2 h-8 gap-0.5 overflow-x-auto shrink-0">
+            {(['code', 'templates', 'tutorials', 'comparison', 'conformance'] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={cn(
+                  'h-5 px-2 text-[10px] font-medium rounded-md whitespace-nowrap transition-colors',
+                  activeTab === tab
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                )}
+              >
+                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="flex-1 min-h-0">
+          <ErrorBoundary fallbackTitle="Panel error" resetKey={isValid}>
+            {mobilePanel === 'editor' && <EditorPanel />}
+            {mobilePanel === 'viz' && <VisualizationPanel />}
+            {mobilePanel === 'right' && renderRightPanel()}
+          </ErrorBoundary>
+        </div>
+      </div>
+    )
+  }
+
+  // Desktop: 3-pane layout
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center border-b px-2 h-9 gap-0.5 overflow-x-auto">
@@ -140,7 +195,7 @@ export function Layout() {
             </ErrorBoundary>
           </Allotment.Pane>
           <Allotment.Pane minSize={300}>
-            <ErrorBoundary fallbackTitle="Visualization error">
+            <ErrorBoundary fallbackTitle="Visualization error" resetKey={isValid}>
               <VisualizationPanel />
             </ErrorBoundary>
           </Allotment.Pane>
