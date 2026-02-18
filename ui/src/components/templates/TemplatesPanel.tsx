@@ -1,6 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useStore } from '@/store'
+import { useSimulation } from '@/hooks/useSimulation'
 import { JOB_TEMPLATES, TEMPLATE_CATEGORIES, type TemplateCategory } from '@/engine/templates'
+import { DEFAULT_JOB_JSON } from '@/engine/constants'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
@@ -12,13 +14,31 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { DiffView } from '@/components/diff/DiffView'
 import { Search, FileCode } from 'lucide-react'
 
 export function TemplatesPanel() {
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<TemplateCategory | 'all'>('all')
   const [levelFilter, setLevelFilter] = useState<string>('all')
+  const [confirmSpec, setConfirmSpec] = useState<string | null>(null)
   const initFromContent = useStore((s) => s.initFromContent)
+  const editorContent = useStore((s) => s.editorContent)
+  const { reset, play } = useSimulation()
+
+  const loadAndPlay = useCallback((content: string) => {
+    initFromContent(content)
+    reset()
+    setTimeout(() => play(), 50)
+  }, [initFromContent, reset, play])
 
   const filtered = useMemo(() => {
     return JOB_TEMPLATES.filter((t) => {
@@ -37,7 +57,22 @@ export function TemplatesPanel() {
   }, [search, categoryFilter, levelFilter])
 
   const handleUseTemplate = (spec: typeof JOB_TEMPLATES[0]['spec']) => {
-    initFromContent(JSON.stringify(spec, null, 2))
+    const newContent = JSON.stringify(spec, null, 2)
+    // Confirm if editor has non-default content
+    const isDefault = editorContent.trim() === DEFAULT_JOB_JSON.trim()
+    const isEmpty = !editorContent.trim()
+    if (isDefault || isEmpty) {
+      loadAndPlay(newContent)
+    } else {
+      setConfirmSpec(newContent)
+    }
+  }
+
+  const handleConfirmReplace = () => {
+    if (confirmSpec) {
+      loadAndPlay(confirmSpec)
+      setConfirmSpec(null)
+    }
   }
 
   return (
@@ -120,6 +155,35 @@ export function TemplatesPanel() {
           )}
         </div>
       </ScrollArea>
+
+      <Dialog open={confirmSpec !== null} onOpenChange={(open) => !open && setConfirmSpec(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-sm">Replace editor content?</DialogTitle>
+            <DialogDescription className="text-xs">
+              Your current editor content will be replaced with this template.
+            </DialogDescription>
+          </DialogHeader>
+          {confirmSpec && (
+            <div className="h-48 border rounded overflow-hidden">
+              <DiffView
+                before={editorContent}
+                after={confirmSpec}
+                beforeLabel="Current"
+                afterLabel="Template"
+              />
+            </div>
+          )}
+          <div className="flex gap-2 justify-end mt-2">
+            <Button size="sm" variant="outline" onClick={() => setConfirmSpec(null)}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleConfirmReplace}>
+              Replace
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
