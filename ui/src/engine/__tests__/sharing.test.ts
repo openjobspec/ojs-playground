@@ -5,7 +5,7 @@ import type { ShareableState } from '../types'
 describe('sharing', () => {
   const testState: ShareableState = {
     spec: JSON.stringify({
-      specversion: '1.0.0-rc.1',
+      specversion: '1.0',
       id: '019461a8-1a2b-7c3d-8e4f-5a6b7c8d9e0f',
       type: 'email.send',
       queue: 'default',

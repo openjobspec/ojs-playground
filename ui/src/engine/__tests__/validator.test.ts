@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { validateJob, validateJobJSON } from '../validator'
 
 const validJob = {
-  specversion: '1.0.0-rc.1',
+  specversion: '1.0',
   id: '019461a8-1a2b-7c3d-8e4f-5a6b7c8d9e0f',
   type: 'email.send',
   queue: 'default',
@@ -34,7 +34,7 @@ describe('validateJob', () => {
   })
 
   it('rejects missing required fields', () => {
-    const result = validateJob({ specversion: '1.0.0-rc.1' })
+    const result = validateJob({ specversion: '1.0' })
     expect(result.valid).toBe(false)
     expect(result.errors.length).toBeGreaterThan(0)
   })

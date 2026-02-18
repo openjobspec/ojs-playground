@@ -39,7 +39,7 @@ describe('checkPayloadSize', () => {
 
   it('accepts valid payload', () => {
     const content = JSON.stringify({
-      specversion: '1.0.0-rc.1',
+      specversion: '1.0',
       id: 'test',
       type: 'email.send',
       queue: 'default',
