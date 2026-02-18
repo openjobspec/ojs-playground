@@ -17,7 +17,7 @@ export const TUTORIALS: Tutorial[] = [
         title: 'Define a Job',
         description: 'Every OJS job needs a `type` (what it does), a `queue` (where it runs), and `args` (what data it needs). The editor on the left shows a pre-filled example. Notice how autocomplete suggests valid fields.',
         spec: JSON.stringify({
-          specversion: '1.0.0-rc.1',
+          specversion: '1.0',
           id: '019461a8-1a2b-7c3d-8e4f-5a6b7c8d9e0f',
           type: 'email.send',
           queue: 'default',
@@ -61,7 +61,7 @@ export const TUTORIALS: Tutorial[] = [
         title: 'Add a Retry Policy',
         description: 'This job has a retry policy with 5 max attempts, exponential backoff starting at 1 second, and jitter enabled. Watch how the retry timeline shows the increasing delays between attempts.',
         spec: JSON.stringify({
-          specversion: '1.0.0-rc.1',
+          specversion: '1.0',
           id: '019461a8-1a2b-7c3d-8e4f-5a6b7c8d9e0f',
           type: 'webhook.deliver',
           queue: 'webhooks',
@@ -111,7 +111,7 @@ export const TUTORIALS: Tutorial[] = [
         title: 'Schedule a Job',
         description: 'This job has a `scheduled_at` field set to a future time. When you simulate it, notice the job starts in the "scheduled" state and waits before becoming "available".',
         spec: JSON.stringify({
-          specversion: '1.0.0-rc.1',
+          specversion: '1.0',
           id: '019461a8-1a2b-7c3d-8e4f-5a6b7c8d9e0f',
           type: 'report.daily_digest',
           queue: 'reports',
