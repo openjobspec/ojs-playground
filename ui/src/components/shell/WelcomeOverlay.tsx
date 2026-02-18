@@ -7,9 +7,11 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useStore } from '@/store'
-import { Code2, Play, Copy } from 'lucide-react'
+import { Code2, Play, Copy, ArrowRight } from 'lucide-react'
 
 const ONBOARDING_KEY = 'ojs-playground-onboarded'
+
+const LIFECYCLE_STATES = ['available', 'active', 'completed']
 
 export function WelcomeOverlay() {
   const showOnboarding = useStore((s) => s.showOnboarding)
@@ -17,7 +19,8 @@ export function WelcomeOverlay() {
 
   const hasSeenBefore = localStorage.getItem(ONBOARDING_KEY) === 'true'
 
-  if (hasSeenBefore && !showOnboarding) return null
+  const isOpen = showOnboarding && !hasSeenBefore
+  if (!isOpen) return null
 
   const handleDismiss = () => {
     localStorage.setItem(ONBOARDING_KEY, 'true')
@@ -31,7 +34,7 @@ export function WelcomeOverlay() {
   ]
 
   return (
-    <Dialog open={showOnboarding && !hasSeenBefore} onOpenChange={(open) => !open && handleDismiss()}>
+    <Dialog open={showOnboarding} onOpenChange={(open) => !open && handleDismiss()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2.5 text-xl">
@@ -45,6 +48,23 @@ export function WelcomeOverlay() {
             in your browser — no backend required.
           </DialogDescription>
         </DialogHeader>
+
+        {/* Animated lifecycle hero */}
+        <div className="flex items-center justify-center gap-2 py-3">
+          {LIFECYCLE_STATES.map((state, i) => (
+            <div key={state} className="flex items-center gap-2">
+              <div
+                className="h-8 px-3 rounded-lg bg-primary/10 text-primary text-xs font-medium flex items-center animate-pulse"
+                style={{ animationDelay: `${i * 0.3}s`, animationDuration: '2s' }}
+              >
+                {state}
+              </div>
+              {i < LIFECYCLE_STATES.length - 1 && (
+                <ArrowRight className="h-3 w-3 text-muted-foreground" />
+              )}
+            </div>
+          ))}
+        </div>
 
         <div className="space-y-3 mt-1">
           {steps.map((step, i) => (
@@ -66,6 +86,16 @@ export function WelcomeOverlay() {
           <span className="text-border">·</span>
           <kbd className="px-1.5 py-0.5 rounded-md bg-muted text-[11px] font-mono border border-border/50">⌘↵</kbd>
           <span>Run simulation</span>
+        </div>
+
+        <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
+          <a href="https://openjobspec.org" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+            Read the spec
+          </a>
+          <span>·</span>
+          <a href="https://github.com/openjobspec" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+            GitHub
+          </a>
         </div>
 
         <Button onClick={handleDismiss} className="w-full mt-2">
