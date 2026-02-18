@@ -33,7 +33,7 @@ function getAjv(): Ajv2020 {
 
 /** Field descriptions for user-friendly error messages */
 const FIELD_HINTS: Record<string, string> = {
-  '/specversion': 'Must be "1.0.0-rc.1" — the current OJS spec version',
+  '/specversion': 'Must be "1.0" — the current OJS spec version',
   '/id': 'Must be a valid UUIDv7 (e.g. 019461a8-1a2b-7c3d-8e4f-5a6b7c8d9e0f)',
   '/type': 'Use dot-separated lowercase names (e.g. email.send, report.generate)',
   '/queue': 'Lowercase alphanumeric with hyphens/dots (e.g. default, high-priority)',
