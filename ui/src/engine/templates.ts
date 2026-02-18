@@ -35,7 +35,7 @@ export const JOB_TEMPLATES: JobTemplate[] = [
     category: 'communication',
     level: 1,
     spec: {
-      specversion: '1.0.0-rc.1',
+      specversion: '1.0',
       id: '019461a8-0001-7000-8000-000000000001',
       type: 'email.send',
       queue: 'default',
@@ -53,7 +53,7 @@ export const JOB_TEMPLATES: JobTemplate[] = [
     category: 'communication',
     level: 1,
     spec: {
-      specversion: '1.0.0-rc.1',
+      specversion: '1.0',
       id: '019461a8-0002-7000-8000-000000000002',
       type: 'email.send_template',
       queue: 'email',
@@ -71,7 +71,7 @@ export const JOB_TEMPLATES: JobTemplate[] = [
     category: 'communication',
     level: 1,
     spec: {
-      specversion: '1.0.0-rc.1',
+      specversion: '1.0',
       id: '019461a8-0003-7000-8000-000000000003',
       type: 'notification.push',
       queue: 'notifications',
@@ -89,7 +89,7 @@ export const JOB_TEMPLATES: JobTemplate[] = [
     category: 'communication',
     level: 1,
     spec: {
-      specversion: '1.0.0-rc.1',
+      specversion: '1.0',
       id: '019461a8-0004-7000-8000-000000000004',
       type: 'sms.send',
       queue: 'sms',
@@ -108,7 +108,7 @@ export const JOB_TEMPLATES: JobTemplate[] = [
     category: 'media',
     level: 0,
     spec: {
-      specversion: '1.0.0-rc.1',
+      specversion: '1.0',
       id: '019461a8-0005-7000-8000-000000000005',
       type: 'image.resize',
       queue: 'media',
@@ -125,7 +125,7 @@ export const JOB_TEMPLATES: JobTemplate[] = [
     category: 'media',
     level: 0,
     spec: {
-      specversion: '1.0.0-rc.1',
+      specversion: '1.0',
       id: '019461a8-0006-7000-8000-000000000006',
       type: 'image.thumbnail',
       queue: 'media',
@@ -143,7 +143,7 @@ export const JOB_TEMPLATES: JobTemplate[] = [
     category: 'data',
     level: 0,
     spec: {
-      specversion: '1.0.0-rc.1',
+      specversion: '1.0',
       id: '019461a8-0007-7000-8000-000000000007',
       type: 'export.csv',
       queue: 'reports',
@@ -160,7 +160,7 @@ export const JOB_TEMPLATES: JobTemplate[] = [
     category: 'data',
     level: 2,
     spec: {
-      specversion: '1.0.0-rc.1',
+      specversion: '1.0',
       id: '019461a8-0008-7000-8000-000000000008',
       type: 'report.daily_digest',
       queue: 'reports',
@@ -178,7 +178,7 @@ export const JOB_TEMPLATES: JobTemplate[] = [
     category: 'data',
     level: 0,
     spec: {
-      specversion: '1.0.0-rc.1',
+      specversion: '1.0',
       id: '019461a8-0009-7000-8000-000000000009',
       type: 'cache.invalidate',
       queue: 'default',
@@ -197,7 +197,7 @@ export const JOB_TEMPLATES: JobTemplate[] = [
     category: 'payments',
     level: 1,
     spec: {
-      specversion: '1.0.0-rc.1',
+      specversion: '1.0',
       id: '019461a8-000a-7000-8000-00000000000a',
       type: 'payment.charge',
       queue: 'payments',
@@ -214,7 +214,7 @@ export const JOB_TEMPLATES: JobTemplate[] = [
     category: 'payments',
     level: 1,
     spec: {
-      specversion: '1.0.0-rc.1',
+      specversion: '1.0',
       id: '019461a8-000b-7000-8000-00000000000b',
       type: 'payment.refund',
       queue: 'payments',
@@ -232,7 +232,7 @@ export const JOB_TEMPLATES: JobTemplate[] = [
     category: 'infrastructure',
     level: 1,
     spec: {
-      specversion: '1.0.0-rc.1',
+      specversion: '1.0',
       id: '019461a8-000c-7000-8000-00000000000c',
       type: 'webhook.deliver',
       queue: 'webhooks',
@@ -249,7 +249,7 @@ export const JOB_TEMPLATES: JobTemplate[] = [
     category: 'infrastructure',
     level: 1,
     spec: {
-      specversion: '1.0.0-rc.1',
+      specversion: '1.0',
       id: '019461a8-000d-7000-8000-00000000000d',
       type: 'sync.api',
       queue: 'sync',
@@ -266,7 +266,7 @@ export const JOB_TEMPLATES: JobTemplate[] = [
     category: 'infrastructure',
     level: 2,
     spec: {
-      specversion: '1.0.0-rc.1',
+      specversion: '1.0',
       id: '019461a8-000e-7000-8000-00000000000e',
       type: 'maintenance.cleanup',
       queue: 'maintenance',
@@ -285,7 +285,7 @@ export const JOB_TEMPLATES: JobTemplate[] = [
     category: 'workflows',
     level: 3,
     spec: {
-      specversion: '1.0.0-rc.1',
+      specversion: '1.0',
       id: '019461a8-000f-7000-8000-00000000000f',
       type: 'workflow.user_onboarding',
       queue: 'workflows',
@@ -305,7 +305,7 @@ export const JOB_TEMPLATES: JobTemplate[] = [
     category: 'workflows',
     level: 3,
     spec: {
-      specversion: '1.0.0-rc.1',
+      specversion: '1.0',
       id: '019461a8-0010-7000-8000-000000000010',
       type: 'workflow.order_fulfillment',
       queue: 'workflows',
@@ -326,7 +326,7 @@ export const JOB_TEMPLATES: JobTemplate[] = [
     category: 'data',
     level: 2,
     spec: {
-      specversion: '1.0.0-rc.1',
+      specversion: '1.0',
       id: '019461a8-0011-7000-8000-000000000011',
       type: 'report.daily_metrics',
       queue: 'reports',
@@ -344,7 +344,7 @@ export const JOB_TEMPLATES: JobTemplate[] = [
     category: 'infrastructure',
     level: 2,
     spec: {
-      specversion: '1.0.0-rc.1',
+      specversion: '1.0',
       id: '019461a8-0012-7000-8000-000000000012',
       type: 'cache.warmup',
       queue: 'maintenance',
@@ -363,7 +363,7 @@ export const JOB_TEMPLATES: JobTemplate[] = [
     category: 'workflows',
     level: 3,
     spec: {
-      specversion: '1.0.0-rc.1',
+      specversion: '1.0',
       id: '019461a8-0013-7000-8000-000000000013',
       type: 'workflow.batch_invoices',
       queue: 'workflows',
