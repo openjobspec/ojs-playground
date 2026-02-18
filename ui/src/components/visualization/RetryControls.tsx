@@ -2,6 +2,7 @@ import { useStore } from '@/store'
 import { Label } from '@/components/ui/label'
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { parseDuration, toIsoDuration } from '@/engine/duration'
 import type { OJSJob } from '@/engine/types'
 import YAML from 'yaml'
@@ -11,6 +12,7 @@ export function RetryControls() {
   const editorContent = useStore((s) => s.editorContent)
   const initFromContent = useStore((s) => s.initFromContent)
   const editorMode = useStore((s) => s.editorMode)
+  const simulationResult = useStore((s) => s.simulationResult)
 
   if (!parsedJob?.retry) {
     return (
@@ -108,6 +110,33 @@ export function RetryControls() {
           className="scale-75"
         />
       </div>
+
+      {/* Retry Schedule Table */}
+      {simulationResult && simulationResult.retrySchedule.length > 0 && (
+        <div className="mt-1 border-t pt-2">
+          <div className="text-[10px] font-medium text-muted-foreground mb-1">Retry Schedule</div>
+          <ScrollArea className="max-h-24">
+            <table className="w-full text-[10px]">
+              <thead>
+                <tr className="text-muted-foreground">
+                  <th className="text-left font-medium pr-2">#</th>
+                  <th className="text-right font-medium pr-2">Delay</th>
+                  <th className="text-right font-medium">Cumulative</th>
+                </tr>
+              </thead>
+              <tbody>
+                {simulationResult.retrySchedule.map((entry) => (
+                  <tr key={entry.retryNumber} className="tabular-nums">
+                    <td className="pr-2">{entry.retryNumber}</td>
+                    <td className="text-right pr-2">{formatMs(entry.finalDelay)}</td>
+                    <td className="text-right">{formatMs(entry.cumulativeTime)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </ScrollArea>
+        </div>
+      )}
     </div>
   )
 }

@@ -5,6 +5,7 @@ import { RetryControls } from './RetryControls'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useStore } from '@/store'
+import { AlertTriangle } from 'lucide-react'
 
 const StateMachine = lazy(() =>
   import('./StateMachine').then((m) => ({ default: m.StateMachine })),
@@ -19,6 +20,7 @@ export function VisualizationPanel() {
   const [announcement, setAnnouncement] = useState('')
   const activeEventIndex = useStore((s) => s.activeEventIndex)
   const simulationResult = useStore((s) => s.simulationResult)
+  const validationResult = useStore((s) => s.validationResult)
 
   useEffect(() => {
     if (activeEventIndex < 0 || !simulationResult) return
@@ -43,7 +45,17 @@ export function VisualizationPanel() {
           </TabsList>
         </Tabs>
       </div>
-      <div className="flex-1 min-h-0" style={{ minHeight: '55%' }}>
+      <div className="flex-1 min-h-0 relative" style={{ minHeight: '55%' }}>
+        {!validationResult.valid && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-2 text-center">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              <p className="text-xs text-muted-foreground max-w-[200px]">
+                Fix validation errors to update visualization
+              </p>
+            </div>
+          </div>
+        )}
         <Suspense
           fallback={
             <div className="flex h-full items-center justify-center">

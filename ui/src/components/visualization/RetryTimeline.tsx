@@ -8,6 +8,7 @@ import {
   Tooltip,
   ErrorBar,
   ResponsiveContainer,
+  ReferenceLine,
 } from 'recharts'
 import { useStore } from '@/store'
 import { formatDuration } from '@/engine/duration'
@@ -15,6 +16,8 @@ import { formatDuration } from '@/engine/duration'
 export function RetryTimeline() {
   const simulationResult = useStore((s) => s.simulationResult)
   const baselineResult = useStore((s) => s.baselineResult)
+  const strategy = useStore((s) => s.strategy)
+  const parsedJob = useStore((s) => s.parsedJob)
 
   const data = useMemo(() => {
     if (!simulationResult) return []
@@ -72,6 +75,27 @@ export function RetryTimeline() {
   }
 
   const { totalDuration, totalAttempts, finalState, retryDelays } = simulationResult
+
+  const backoffFormula = useMemo(() => {
+    if (!parsedJob?.retry) return null
+    const coeff = parsedJob.retry.backoff_coefficient ?? 2
+    const initial = parsedJob.retry.initial_interval ?? 'PT1S'
+    const jitter = parsedJob.retry.jitter ? ' + jitter' : ''
+    switch (strategy) {
+      case 'exponential': return `${coeff}^n × ${initial}${jitter}`
+      case 'linear': return `n × ${initial}${jitter}`
+      case 'polynomial': return `n^${coeff} × ${initial}${jitter}`
+      case 'none': return `${initial}${jitter}`
+      default: return null
+    }
+  }, [parsedJob, strategy])
+
+  // Get timestamps of retry events for reference lines
+  const retryTimestamps = useMemo(() => {
+    return data
+      .filter((d) => d.isFail)
+      .map((d) => d.time)
+  }, [data])
 
   return (
     <div className="h-full w-full flex flex-col">
@@ -143,6 +167,15 @@ export function RetryTimeline() {
             >
               <ErrorBar dataKey="errorX" width={4} strokeWidth={1.5} stroke="hsl(var(--primary))" direction="x" />
             </Scatter>
+            {retryTimestamps.map((t, i) => (
+              <ReferenceLine
+                key={`retry-${i}`}
+                x={t}
+                stroke="hsl(0, 84%, 60%)"
+                strokeDasharray="3 3"
+                opacity={0.4}
+              />
+            ))}
           </ScatterChart>
         </ResponsiveContainer>
       </div>
@@ -156,7 +189,10 @@ export function RetryTimeline() {
             {finalState}
           </strong>
         </span>
-        {retryDelays.length > 0 && (
+        {backoffFormula && (
+          <span className="ml-auto font-mono">Backoff: {backoffFormula}</span>
+        )}
+        {!backoffFormula && retryDelays.length > 0 && (
           <span>Delays: {retryDelays.map((d) => formatDuration(d)).join(' → ')}</span>
         )}
       </div>
