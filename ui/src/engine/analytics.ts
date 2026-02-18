@@ -59,3 +59,28 @@ export function getBufferedEvents(): readonly AnalyticsPayload[] {
 export function clearBuffer(): void {
   buffer.length = 0
 }
+
+/**
+ * Flush events to an analytics endpoint via sendBeacon.
+ * No-op if no endpoint is configured.
+ */
+export function flushEvents(endpoint?: string): void {
+  if (!endpoint || buffer.length === 0) return
+  try {
+    const data = JSON.stringify(buffer)
+    navigator.sendBeacon(endpoint, data)
+    buffer.length = 0
+  } catch {
+    // Silently fail — analytics should never break the app
+  }
+}
+
+// Flush on page unload if an endpoint is configured
+if (typeof window !== 'undefined') {
+  window.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      const endpoint = (import.meta as unknown as { env?: { VITE_ANALYTICS_ENDPOINT?: string } }).env?.VITE_ANALYTICS_ENDPOINT
+      if (endpoint) flushEvents(endpoint)
+    }
+  })
+}
