@@ -70,6 +70,7 @@ ojs-playground/
 ├── server/                # Go backend for Local Mode
 │   ├── cmd/playground/    # CLI entry point
 │   └── internal/          # Server packages (api, sse, backends, discovery, chaos)
+├── embed/                 # Embeddable widget for documentation sites
 └── npm/                   # npx distribution package
 ```
 
@@ -85,6 +86,26 @@ ojs-playground/
 - **Templates library** — 15+ pre-built job spec templates
 - **Dark/light themes** — System-aware with manual toggle
 - **Keyboard shortcuts** — Cmd+K (palette), Cmd+Enter (simulate), Cmd+Shift+C (copy code)
+
+### Job IDE (GraphiQL-like Experience)
+- **Left pane**: JSON job definition editor with templates (simple, retry, scheduled, workflow, batch)
+- **Right pane**: Live job state transitions visualization
+- **Bottom pane**: Execution log with timestamps
+- **Server connection**: Connect to any OJS server or use browser simulation mode
+
+## Embeddable Widget
+
+Drop an OJS playground into any documentation site with a single script tag:
+
+```html
+<script
+  src="https://playground.openjobspec.org/embed.js"
+  data-url="http://localhost:8080"
+  data-theme="dark">
+</script>
+```
+
+Configurable theme, size, and server URL. See [`embed/README.md`](embed/README.md) for details.
 
 ## License
 

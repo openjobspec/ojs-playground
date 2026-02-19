@@ -49,6 +49,9 @@ const JobDetailPanel = lazy(() =>
 const ConformanceRunnerPanel = lazy(() =>
   import('@/components/local/ConformanceRunnerPanel').then((m) => ({ default: m.ConformanceRunnerPanel })),
 )
+const JobIDEPanel = lazy(() =>
+  import('@/components/jobide/JobIDE').then((m) => ({ default: m.JobIDE })),
+)
 
 const LazyFallback = (
   <div className="flex h-full items-center justify-center">
@@ -56,7 +59,7 @@ const LazyFallback = (
   </div>
 )
 
-type RightTab = 'code' | 'templates' | 'comparison' | 'conformance' | 'tutorials' | 'cron' | 'dlq' | 'backpressure' | 'queues' | 'middleware' | 'workers' | 'chaos' | 'jobs' | 'test-runner'
+type RightTab = 'code' | 'templates' | 'comparison' | 'conformance' | 'tutorials' | 'cron' | 'dlq' | 'backpressure' | 'queues' | 'middleware' | 'workers' | 'chaos' | 'jobs' | 'test-runner' | 'job-ide'
 type MobilePanel = 'editor' | 'viz' | 'right'
 
 export function Layout() {
@@ -95,6 +98,8 @@ export function Layout() {
         return <Suspense fallback={LazyFallback}><JobDetailPanel /></Suspense>
       case 'test-runner':
         return <Suspense fallback={LazyFallback}><ConformanceRunnerPanel /></Suspense>
+      case 'job-ide':
+        return <Suspense fallback={LazyFallback}><JobIDEPanel /></Suspense>
       case 'code':
       default:
         return <CodegenPanel />
@@ -154,7 +159,7 @@ export function Layout() {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center border-b px-2 h-9 gap-0.5 overflow-x-auto">
-        {(['code', 'templates', 'comparison', 'conformance', 'tutorials', 'cron', 'dlq', 'backpressure', 'queues', 'middleware'] as const).map((tab) => (
+        {(['code', 'templates', 'comparison', 'conformance', 'tutorials', 'cron', 'dlq', 'backpressure', 'queues', 'middleware', 'job-ide'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -165,7 +170,7 @@ export function Layout() {
                 : 'text-muted-foreground hover:text-foreground hover:bg-muted'
             )}
           >
-            {tab === 'code' ? 'Code' : tab === 'dlq' ? 'DLQ' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+            {tab === 'code' ? 'Code' : tab === 'dlq' ? 'DLQ' : tab === 'job-ide' ? 'Job IDE' : tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
         ))}
         {isLocalMode && (
