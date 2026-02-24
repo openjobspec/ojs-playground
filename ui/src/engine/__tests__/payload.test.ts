@@ -68,3 +68,4 @@ describe('formatBytes', () => {
     expect(formatBytes(5 * 1024 * 1024)).toBe('5.0 MB')
   })
 })
+
