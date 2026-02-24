@@ -117,4 +117,3 @@ export function downloadProjectAsScript(job: OJSJob, language: CodegenLanguage):
   a.click()
   URL.revokeObjectURL(url)
 }
-
