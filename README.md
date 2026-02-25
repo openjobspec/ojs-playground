@@ -110,3 +110,4 @@ Configurable theme, size, and server URL. See [`embed/README.md`](embed/README.m
 ## License
 
 Apache License 2.0 — see [LICENSE](LICENSE).
+
