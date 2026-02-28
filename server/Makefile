@@ -1,6 +1,6 @@
 .PHONY: dev build build-all docker test lint clean copy-ui
 
-VERSION ?= 0.1.0
+VERSION ?= 0.2.0
 BINARY  := bin/ojs-playground
 GOFLAGS := -ldflags="-s -w -X main.version=$(VERSION)"
 
