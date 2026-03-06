@@ -83,3 +83,4 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
     set({ tabs: get().tabs.map((t) => (t.id === id ? { ...t, title } : t)) })
   },
 })
+
