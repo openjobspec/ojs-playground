@@ -1,10 +1,14 @@
 package api
 
 import (
+	"fmt"
+	"log/slog"
+
 	"github.com/go-chi/chi/v5"
 
 	"github.com/openjobspec/ojs-playground/server/internal/backends"
 	"github.com/openjobspec/ojs-playground/server/internal/chaos"
+	"github.com/openjobspec/ojs-playground/server/internal/conformance"
 	"github.com/openjobspec/ojs-playground/server/internal/discovery"
 	"github.com/openjobspec/ojs-playground/server/internal/history"
 	"github.com/openjobspec/ojs-playground/server/internal/sse"
@@ -20,6 +24,8 @@ type RouteDeps struct {
 	WorkerRegistry  *discovery.Registry
 	Port            int
 	BackendNames    []string
+	SuitesDir       string
+	OJSBaseURL      string
 }
 
 // RegisterRoutes registers all API routes on the given chi router.
@@ -29,7 +35,24 @@ func RegisterRoutes(r chi.Router, deps *RouteDeps) {
 	backendHandler := NewBackendHandler(deps.BackendManager)
 	workerHandler := NewWorkerHandler(deps.WorkerRegistry)
 	chaosHandler := NewChaosHandler(deps.ChaosConfig, deps.Broadcaster)
-	conformanceHandler := NewConformanceHandler()
+
+	// Create conformance runner if suites directory is configured
+	var runner *conformance.Runner
+	if deps.SuitesDir != "" {
+		suites, err := conformance.NewSuiteLoader(deps.SuitesDir)
+		if err != nil {
+			slog.Warn("failed to load conformance suites", "dir", deps.SuitesDir, "err", err)
+		} else if suites.Count() > 0 {
+			baseURL := deps.OJSBaseURL
+			if baseURL == "" {
+				baseURL = fmt.Sprintf("http://localhost:%d", deps.Port)
+			}
+			runner = conformance.NewRunner(baseURL, suites, deps.Broadcaster)
+			slog.Info("conformance runner initialized", "suites", suites.Count(), "dir", deps.SuitesDir)
+		}
+	}
+
+	conformanceHandler := NewConformanceHandler(runner)
 	sseHandler := sse.NewHandler(deps.Broadcaster)
 
 	r.Route("/api", func(r chi.Router) {

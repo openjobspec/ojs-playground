@@ -48,6 +48,7 @@ func NewRouter(deps *Deps) http.Handler {
 		WorkerRegistry: deps.WorkerRegistry,
 		Port:           deps.Config.Port,
 		BackendNames:   deps.Config.Backends,
+		SuitesDir:      deps.Config.SuitesDir,
 	}
 	api.RegisterRoutes(r, routeDeps)
 

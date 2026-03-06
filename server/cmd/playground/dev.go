@@ -40,6 +40,7 @@ func init() {
 	devCmd.Flags().BoolVar(&cfg.OpenBrowser, "open", cfg.OpenBrowser, "Open browser on start")
 	devCmd.Flags().BoolVarP(&cfg.Verbose, "verbose", "v", cfg.Verbose, "Verbose logging")
 	devCmd.Flags().StringVar(&cfg.DataDir, "data-dir", cfg.DataDir, "Data directory for SQLite (default: ~/.ojs-playground)")
+	devCmd.Flags().StringVar(&cfg.SuitesDir, "conformance-dir", cfg.SuitesDir, "Conformance suites directory (default: ../ojs-conformance/suites/http)")
 
 	// Store config reference for RunE
 	devCmd.PreRun = func(cmd *cobra.Command, args []string) {
@@ -71,6 +72,15 @@ func runDev(cmd *cobra.Command, args []string) error {
 	}
 	if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
 		return fmt.Errorf("create data dir: %w", err)
+	}
+
+	// Default conformance suites directory to common development layout
+	if cfg.SuitesDir == "" {
+		defaultDir := "../ojs-conformance/suites/http"
+		if info, err := os.Stat(defaultDir); err == nil && info.IsDir() {
+			cfg.SuitesDir = defaultDir
+			slog.Info("auto-detected conformance suites", "dir", defaultDir)
+		}
 	}
 
 	ctx := context.Background()

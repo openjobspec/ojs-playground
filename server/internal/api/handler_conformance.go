@@ -1,46 +1,63 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+
+	"github.com/openjobspec/ojs-playground/server/internal/conformance"
 )
 
 // ConformanceHandler handles conformance test endpoints.
 type ConformanceHandler struct {
-	mu   sync.RWMutex
-	runs map[string]*ConformanceRun
+	mu     sync.RWMutex
+	runs   map[string]*ConformanceRun
+	runner *conformance.Runner
 }
 
 // ConformanceRun represents a conformance test run.
 type ConformanceRun struct {
-	ID        string    `json:"id"`
-	Status    string    `json:"status"` // "running", "completed", "failed"
-	Level     int       `json:"level"`
-	StartedAt time.Time `json:"started_at"`
-	EndedAt   *time.Time `json:"ended_at,omitempty"`
-	Results   any       `json:"results,omitempty"`
+	ID        string               `json:"id"`
+	Status    string               `json:"status"` // "running", "completed", "failed"
+	Level     int                  `json:"level"`
+	StartedAt time.Time            `json:"started_at"`
+	EndedAt   *time.Time           `json:"ended_at,omitempty"`
+	Results   any                  `json:"results,omitempty"`
+	RunResult *conformance.RunResult `json:"-"`
 }
 
 // NewConformanceHandler creates a new ConformanceHandler.
-func NewConformanceHandler() *ConformanceHandler {
+func NewConformanceHandler(runner *conformance.Runner) *ConformanceHandler {
 	return &ConformanceHandler{
-		runs: make(map[string]*ConformanceRun),
+		runs:   make(map[string]*ConformanceRun),
+		runner: runner,
 	}
+}
+
+// conformanceRunRequest is the expected request body for starting a run.
+type conformanceRunRequest struct {
+	Level int `json:"level"`
 }
 
 // Run handles POST /api/conformance/run.
 func (h *ConformanceHandler) Run(w http.ResponseWriter, r *http.Request) {
+	// Parse optional level from request body
+	var req conformanceRunRequest
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+
 	uid, _ := uuid.NewV7()
 	id := uid.String()
 
 	run := &ConformanceRun{
 		ID:        id,
 		Status:    "running",
-		Level:     0,
+		Level:     req.Level,
 		StartedAt: time.Now(),
 	}
 
@@ -48,23 +65,33 @@ func (h *ConformanceHandler) Run(w http.ResponseWriter, r *http.Request) {
 	h.runs[id] = run
 	h.mu.Unlock()
 
-	// Conformance test execution is not yet implemented.
-	// This stub returns a placeholder result until the embedded runner is added.
-	// Track progress: https://github.com/openjobspec/ojs-playground/issues
-	go func() {
-		time.Sleep(100 * time.Millisecond)
-		h.mu.Lock()
-		now := time.Now()
-		run.Status = "completed"
-		run.EndedAt = &now
-		run.Results = map[string]any{
-			"total":  0,
-			"passed": 0,
-			"failed": 0,
-			"message": "Conformance test execution is not yet available in the playground. Use the standalone ojs-conformance runner instead.",
-		}
-		h.mu.Unlock()
-	}()
+	if h.runner == nil {
+		// Placeholder behavior when no conformance runner is configured.
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			h.mu.Lock()
+			now := time.Now()
+			run.Status = "completed"
+			run.EndedAt = &now
+			run.Results = map[string]any{
+				"total":   0,
+				"passed":  0,
+				"failed":  0,
+				"message": "Conformance test execution is not yet available in the playground. Use the standalone ojs-conformance runner instead.",
+			}
+			h.mu.Unlock()
+		}()
+	} else {
+		go func() {
+			result := h.runner.Run(r.Context(), id, req.Level)
+			h.mu.Lock()
+			run.Status = result.Status
+			run.EndedAt = result.EndedAt
+			run.RunResult = result
+			run.Results = result
+			h.mu.Unlock()
+		}()
+	}
 
 	WriteJSON(w, http.StatusAccepted, map[string]any{"run": run})
 }
@@ -95,6 +122,15 @@ func (h *ConformanceHandler) GetReport(w http.ResponseWriter, r *http.Request) {
 
 	if !ok {
 		WriteError(w, http.StatusNotFound, "Conformance run not found: "+id)
+		return
+	}
+
+	if run.RunResult != nil {
+		report := conformance.GenerateReport(run.RunResult)
+		WriteJSON(w, http.StatusOK, map[string]any{
+			"run":    run,
+			"report": report,
+		})
 		return
 	}
 

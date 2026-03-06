@@ -11,6 +11,7 @@ type Config struct {
 	OpenBrowser bool
 	Verbose     bool
 	DataDir     string
+	SuitesDir   string
 }
 
 // DefaultConfig returns a Config with sensible defaults.

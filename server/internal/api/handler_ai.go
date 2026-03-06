@@ -2,7 +2,9 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/openjobspec/ojs-playground/server/internal/ai"
 )
@@ -77,13 +79,55 @@ func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Without an LLM API key, return the system prompt for client-side generation
+	// Try template matching from prompt keywords
+	if req.Prompt != "" {
+		templates := ai.GetTemplates()
+		prompt := strings.ToLower(req.Prompt)
+
+		for _, tmpl := range templates {
+			name := strings.ToLower(tmpl.Name)
+			desc := strings.ToLower(tmpl.Description)
+			cat := strings.ToLower(tmpl.Category)
+			id := strings.ToLower(tmpl.ID)
+
+			if strings.Contains(prompt, name) || strings.Contains(prompt, id) ||
+				strings.Contains(prompt, cat) || containsAnyWord(prompt, desc) {
+				writeJSON(w, http.StatusOK, ai.GenerateResponse{
+					Manifest: tmpl.Manifest,
+					Language: req.Language,
+					Code:     fmt.Sprintf("// Matched template: %s\n// For AI-powered generation, use the system prompt at GET /api/ai/prompt with your own API key.", tmpl.Name),
+				})
+				return
+			}
+		}
+	}
+
+	// Fallback: return first template with guidance
+	templates := ai.GetTemplates()
+	if len(templates) > 0 {
+		writeJSON(w, http.StatusOK, ai.GenerateResponse{
+			Manifest: templates[0].Manifest,
+			Language: req.Language,
+			Code:     fmt.Sprintf("// Default template: %s\n// For custom AI generation, use GET /api/ai/prompt to get the system prompt, then call your preferred LLM API.", templates[0].Name),
+		})
+		return
+	}
+
 	writeJSON(w, http.StatusOK, ai.GenerateResponse{
-		Manifest: "",
 		Errors: []string{
-			"LLM API not configured. Use the system prompt at GET /api/ai/prompt with your own API key.",
+			"No templates available. Use the system prompt at GET /api/ai/prompt with your own API key.",
 		},
 	})
+}
+
+// containsAnyWord checks if any significant word (3+ chars) from text appears in prompt.
+func containsAnyWord(prompt, text string) bool {
+	for _, word := range strings.Fields(text) {
+		if len(word) >= 3 && strings.Contains(prompt, word) {
+			return true
+		}
+	}
+	return false
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
