@@ -7,7 +7,7 @@ Thank you for your interest in contributing to the OJS Playground! This guide co
 ### Prerequisites
 
 - Node.js 18+
-- Go 1.22+ (for server development)
+- Go 1.24+ (for server development)
 - Docker (optional, for Local Mode testing)
 
 ### UI Development

@@ -50,11 +50,11 @@ function getJobNodes(design: WorkflowDesign): WorkflowNode[] {
   return design.nodes.filter((n) => n.type === 'job');
 }
 
-function getOutgoingEdges(nodeId: string, edges: WorkflowEdge[]): WorkflowEdge[] {
+function _getOutgoingEdges(nodeId: string, edges: WorkflowEdge[]): WorkflowEdge[] {
   return edges.filter((e) => e.source === nodeId);
 }
 
-function getIncomingEdges(nodeId: string, edges: WorkflowEdge[]): WorkflowEdge[] {
+function _getIncomingEdges(nodeId: string, edges: WorkflowEdge[]): WorkflowEdge[] {
   return edges.filter((e) => e.target === nodeId);
 }
 
@@ -78,7 +78,7 @@ export function designToOJSSpec(design: WorkflowDesign): object {
   const targetIds = new Set(
     design.edges.filter((e) => jobNodeIds.has(e.source)).map((e) => e.target)
   );
-  const rootNodes = jobNodes.filter((n) => !targetIds.has(n.id));
+  const _rootNodes = jobNodes.filter((n) => !targetIds.has(n.id));
 
   // Build topologically sorted steps
   const sorted = topologicalSort(jobNodes, design.edges);
@@ -532,16 +532,16 @@ function toPascalCase(s: string): string {
   return s.split(/[._-]/).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join('');
 }
 
-function toSnakeCase(s: string): string {
+function _toSnakeCase(s: string): string {
   return s.replace(/[.\-]/g, '_').toLowerCase();
 }
 
-function toCamelCase(s: string): string {
+function _toCamelCase(s: string): string {
   const pascal = toPascalCase(s);
   return pascal.charAt(0).toLowerCase() + pascal.slice(1);
 }
 
-function argsToJson(args?: Record<string, unknown>): string {
+function _argsToJson(args?: Record<string, unknown>): string {
   if (!args || Object.keys(args).length === 0) return '{}';
   return JSON.stringify(args, null, 2);
 }

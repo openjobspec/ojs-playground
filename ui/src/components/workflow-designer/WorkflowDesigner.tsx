@@ -381,7 +381,7 @@ export function WorkflowDesigner({
   )
 
   // Double-click node to start connecting
-  const handleNodeDoubleClick = useCallback((nodeId: string) => {
+  const _handleNodeDoubleClick = useCallback((nodeId: string) => {
     dispatch({ type: 'START_CONNECT', nodeId })
   }, [])
 
