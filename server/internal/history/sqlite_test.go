@@ -264,10 +264,11 @@ func TestSaveJobWithResultAndError(t *testing.T) {
 }
 
 func TestNewSQLiteStoreInvalidPath(t *testing.T) {
-	// This should fail on non-writable path
+	// Non-writable path should fail at Open or migration; verify it doesn't panic.
 	_, err := NewSQLiteStore(context.Background(), "/nonexistent/dir/test.db")
-	// On some systems this may not fail at Open but at migration, just check it doesn't panic
-	_ = err
+	if err == nil {
+		t.Log("expected error for non-writable path, but got nil (may vary by OS)")
+	}
 }
 
 func TestCloseIdempotent(t *testing.T) {
