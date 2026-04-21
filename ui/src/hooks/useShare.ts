@@ -1,7 +1,9 @@
 import { useCallback } from 'react'
 import { useStore } from '@/store'
-import { encodeState, decodeState, getShareUrl } from '@/engine/sharing'
+import { getShareUrl } from '@/engine/sharing'
 import type { ShareableState } from '@/engine/types'
+import { loadFromUrl as loadStateFromUrl, syncToUrl } from '@/store/middleware/url-sync'
+import { toast } from 'sonner'
 
 export function useShare() {
   const editorContent = useStore((s) => s.editorContent)
@@ -21,6 +23,7 @@ export function useShare() {
 
   const buildShareableState = useCallback((): ShareableState => {
     return {
+      version: 1,
       spec: editorContent,
       editorMode,
       language,
@@ -33,18 +36,23 @@ export function useShare() {
 
   const copyShareUrl = useCallback(async () => {
     const state = buildShareableState()
-    const { url, isLocal } = getShareUrl(state)
+    const { url, hash, isLocal } = getShareUrl(state)
     await navigator.clipboard.writeText(url)
-    window.history.replaceState(null, '', encodeState(state))
+    syncToUrl(hash)
     return { url, isLocal }
   }, [buildShareableState])
 
   const loadFromUrl = useCallback(() => {
-    const hash = window.location.hash
-    if (!hash) return false
-
-    const state = decodeState(hash)
-    if (!state) return false
+    const result = loadStateFromUrl()
+    if (!result.ok) {
+      if (result.error !== 'not_share_link' && window.location.hash) {
+        toast.error('Unable to load shared playground', {
+          description: `${result.message}. You can continue with a new spec.`,
+        })
+      }
+      return false
+    }
+    const state = result.state
 
     if (state.editorMode) setEditorMode(state.editorMode)
     if (state.language) setLanguage(state.language)

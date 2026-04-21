@@ -3,6 +3,11 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { Toaster } from '@/components/ui/sonner'
 import { useTheme } from '@/hooks/useTheme'
 import { useStore } from '@/store'
+import {
+  escapeHTMLAttribute,
+  getEmbedOptions,
+  normalizeEmbedDimension,
+} from '@/engine/embed-config'
 
 import { EditorPanel } from '@/components/editor/EditorPanel'
 import { CodegenPanel } from '@/components/codegen/CodegenPanel'
@@ -15,17 +20,29 @@ import { CodegenPanel } from '@/components/codegen/CodegenPanel'
 export function EmbedLayout() {
   useTheme()
   const initFromContent = useStore((s) => s.initFromContent)
+  const setTheme = useStore((s) => s.setTheme)
+  const setLanguage = useStore((s) => s.setLanguage)
 
   useEffect(() => {
+    const options = getEmbedOptions()
+    if (options.theme) setTheme(options.theme)
+    if (options.language) setLanguage(options.language)
+    if (options.spec) initFromContent(options.spec)
+
     // Listen for postMessage from parent to set spec
     const handler = (e: MessageEvent) => {
-      if (e.data?.type === 'ojs-playground:set-spec' && typeof e.data.spec === 'string') {
+      if (
+        e.source === window.parent &&
+        e.data?.type === 'ojs-playground:set-spec' &&
+        typeof e.data.spec === 'string' &&
+        e.data.spec.length <= 64 * 1024
+      ) {
         initFromContent(e.data.spec)
       }
     }
     window.addEventListener('message', handler)
     return () => window.removeEventListener('message', handler)
-  }, [initFromContent])
+  }, [initFromContent, setLanguage, setTheme])
 
   return (
     <TooltipProvider>
@@ -47,22 +64,21 @@ export function EmbedLayout() {
  */
 export function isEmbedMode(): boolean {
   if (typeof window === 'undefined') return false
-  const params = new URLSearchParams(window.location.search)
-  return params.get('embed') === 'true'
+  return getEmbedOptions().enabled
 }
 
 /**
  * Generate the embed snippet for a given spec.
  */
 export function getEmbedSnippet(spec: string, options?: { width?: string; height?: string }): string {
-  const width = options?.width ?? '100%'
-  const height = options?.height ?? '400px'
+  const width = normalizeEmbedDimension(options?.width, '100%')
+  const height = normalizeEmbedDimension(options?.height, '400px')
   const encodedSpec = encodeURIComponent(spec)
-  const baseUrl = `${window.location.origin}${window.location.pathname}`
+  const baseUrl = escapeHTMLAttribute(`${window.location.origin}${window.location.pathname}`)
   return `<iframe
   src="${baseUrl}?embed=true&spec=${encodedSpec}"
-  width="${width}"
-  height="${height}"
+  width="${escapeHTMLAttribute(width)}"
+  height="${escapeHTMLAttribute(height)}"
   style="border: 1px solid #e5e7eb; border-radius: 8px;"
   title="OJS Playground"
 ></iframe>`
