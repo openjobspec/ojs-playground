@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -19,6 +20,7 @@ import (
 
 // Deps holds all subsystem dependencies for the server.
 type Deps struct {
+	Context        context.Context
 	Config         *Config
 	Store          history.Store
 	Broadcaster    *sse.Broadcaster
@@ -40,6 +42,7 @@ func NewRouter(deps *Deps) http.Handler {
 
 	// Register all API routes
 	routeDeps := &api.RouteDeps{
+		Context:        deps.Context,
 		Store:          deps.Store,
 		Broadcaster:    deps.Broadcaster,
 		BackendManager: deps.BackendManager,

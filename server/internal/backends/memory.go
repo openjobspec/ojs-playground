@@ -11,6 +11,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+
+	"github.com/openjobspec/ojs-playground/server/internal/httpjson"
 )
 
 // Job states as defined by the OJS specification.
@@ -55,25 +57,146 @@ func isTerminalState(state string) bool {
 
 // MemoryJob is the in-memory representation of a job.
 type MemoryJob struct {
-	ID          string          `json:"id"`
-	Type        string          `json:"type"`
-	State       string          `json:"state"`
-	Queue       string          `json:"queue"`
-	Args        json.RawMessage `json:"args"`
-	Meta        json.RawMessage `json:"meta,omitempty"`
-	Priority    int             `json:"priority"`
-	Attempt     int             `json:"attempt"`
-	MaxAttempts int             `json:"max_attempts"`
-	TimeoutMs   *int            `json:"timeout_ms,omitempty"`
-	CreatedAt   string          `json:"created_at"`
-	EnqueuedAt  string          `json:"enqueued_at,omitempty"`
-	StartedAt   string          `json:"started_at,omitempty"`
-	CompletedAt string          `json:"completed_at,omitempty"`
-	CancelledAt string          `json:"cancelled_at,omitempty"`
-	ScheduledAt string          `json:"scheduled_at,omitempty"`
-	Result      json.RawMessage `json:"result,omitempty"`
-	Error       json.RawMessage `json:"error,omitempty"`
-	Tags        []string        `json:"tags,omitempty"`
+	SpecVersion         string                     `json:"specversion"`
+	ID                  string                     `json:"id"`
+	Type                string                     `json:"type"`
+	State               string                     `json:"state"`
+	Queue               string                     `json:"queue"`
+	Args                json.RawMessage            `json:"args"`
+	Meta                json.RawMessage            `json:"meta,omitempty"`
+	Schema              string                     `json:"schema,omitempty"`
+	Priority            int                        `json:"priority"`
+	Attempt             int                        `json:"attempt"`
+	MaxAttempts         int                        `json:"max_attempts"`
+	TimeoutMs           *int                       `json:"timeout_ms,omitempty"`
+	VisibilityTimeoutMs *int                       `json:"visibility_timeout_ms,omitempty"`
+	Retry               json.RawMessage            `json:"retry,omitempty"`
+	Unique              json.RawMessage            `json:"unique,omitempty"`
+	CreatedAt           string                     `json:"created_at"`
+	EnqueuedAt          string                     `json:"enqueued_at,omitempty"`
+	StartedAt           string                     `json:"started_at,omitempty"`
+	CompletedAt         string                     `json:"completed_at,omitempty"`
+	CancelledAt         string                     `json:"cancelled_at,omitempty"`
+	ScheduledAt         string                     `json:"scheduled_at,omitempty"`
+	ExpiresAt           string                     `json:"expires_at,omitempty"`
+	Result              json.RawMessage            `json:"result,omitempty"`
+	Error               json.RawMessage            `json:"error,omitempty"`
+	Tags                []string                   `json:"tags,omitempty"`
+	Extensions          map[string]json.RawMessage `json:"-"`
+}
+
+type memoryEnqueueRequest struct {
+	ID         string                     `json:"id,omitempty"`
+	Type       string                     `json:"type"`
+	Args       json.RawMessage            `json:"args"`
+	Meta       json.RawMessage            `json:"meta,omitempty"`
+	Schema     string                     `json:"schema,omitempty"`
+	Options    *memoryJobOptions          `json:"options,omitempty"`
+	Extensions map[string]json.RawMessage `json:"-"`
+}
+
+type memoryJobOptions struct {
+	Queue               string          `json:"queue,omitempty"`
+	Priority            *int            `json:"priority,omitempty"`
+	TimeoutMs           *int            `json:"timeout_ms,omitempty"`
+	DelayUntil          string          `json:"delay_until,omitempty"`
+	ScheduledAt         string          `json:"scheduled_at,omitempty"`
+	ExpiresAt           string          `json:"expires_at,omitempty"`
+	Retry               json.RawMessage `json:"retry,omitempty"`
+	Unique              json.RawMessage `json:"unique,omitempty"`
+	Tags                []string        `json:"tags,omitempty"`
+	VisibilityTimeoutMs *int            `json:"visibility_timeout_ms,omitempty"`
+}
+
+func (r *memoryEnqueueRequest) UnmarshalJSON(data []byte) error {
+	type requestAlias memoryEnqueueRequest
+	var decoded requestAlias
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	for _, name := range []string{"id", "type", "args", "meta", "schema", "options"} {
+		delete(fields, name)
+	}
+	*r = memoryEnqueueRequest(decoded)
+	r.Extensions = cloneRawMap(fields)
+	return nil
+}
+
+// MarshalJSON preserves unknown top-level envelope attributes without allowing
+// them to replace server-managed fields.
+func (j MemoryJob) MarshalJSON() ([]byte, error) {
+	type memoryJobAlias MemoryJob
+	base, err := json.Marshal(memoryJobAlias(j))
+	if err != nil {
+		return nil, err
+	}
+	if len(j.Extensions) == 0 {
+		return base, nil
+	}
+
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(base, &fields); err != nil {
+		return nil, err
+	}
+	for name, value := range j.Extensions {
+		if _, exists := fields[name]; exists {
+			continue
+		}
+		fields[name] = cloneRawMessage(value)
+	}
+	return json.Marshal(fields)
+}
+
+func cloneRawMessage(value json.RawMessage) json.RawMessage {
+	if value == nil {
+		return nil
+	}
+	return append(json.RawMessage(nil), value...)
+}
+
+func cloneRawMap(values map[string]json.RawMessage) map[string]json.RawMessage {
+	if values == nil {
+		return nil
+	}
+	clone := make(map[string]json.RawMessage, len(values))
+	for name, value := range values {
+		clone[name] = cloneRawMessage(value)
+	}
+	return clone
+}
+
+func cloneMemoryJob(job *MemoryJob) *MemoryJob {
+	if job == nil {
+		return nil
+	}
+	clone := *job
+	clone.Args = cloneRawMessage(job.Args)
+	clone.Meta = cloneRawMessage(job.Meta)
+	clone.Retry = cloneRawMessage(job.Retry)
+	clone.Unique = cloneRawMessage(job.Unique)
+	clone.Result = cloneRawMessage(job.Result)
+	clone.Error = cloneRawMessage(job.Error)
+	clone.Tags = append([]string(nil), job.Tags...)
+	if job.Extensions != nil {
+		clone.Extensions = make(map[string]json.RawMessage, len(job.Extensions))
+		for name, value := range job.Extensions {
+			clone.Extensions[name] = cloneRawMessage(value)
+		}
+	}
+	if job.TimeoutMs != nil {
+		timeout := *job.TimeoutMs
+		clone.TimeoutMs = &timeout
+	}
+	if job.VisibilityTimeoutMs != nil {
+		timeout := *job.VisibilityTimeoutMs
+		clone.VisibilityTimeoutMs = &timeout
+	}
+	return &clone
 }
 
 // StateChangeCallback is called when a job state changes.
@@ -81,10 +204,10 @@ type StateChangeCallback func(job *MemoryJob, fromState, toState string)
 
 // MemoryBackend implements a full Level 0 OJS backend in memory.
 type MemoryBackend struct {
-	mu              sync.RWMutex
-	jobs            map[string]*MemoryJob
-	queues          map[string][]*MemoryJob // queue name → available jobs (sorted by priority)
-	onStateChange   StateChangeCallback
+	mu            sync.RWMutex
+	jobs          map[string]*MemoryJob
+	queues        map[string][]*MemoryJob // queue name → available jobs (sorted by priority)
+	onStateChange StateChangeCallback
 }
 
 // NewMemoryBackend creates a new in-memory backend.
@@ -136,6 +259,14 @@ func (m *MemoryBackend) Stats(ctx context.Context) (*BackendStats, error) {
 // Close is a no-op for in-memory backend.
 func (m *MemoryBackend) Close() error { return nil }
 
+// Reset removes all jobs and queues so conformance tests can run in isolation.
+func (m *MemoryBackend) Reset() {
+	m.mu.Lock()
+	m.jobs = make(map[string]*MemoryJob)
+	m.queues = make(map[string][]*MemoryJob)
+	m.mu.Unlock()
+}
+
 // Router returns a chi router implementing OJS HTTP endpoints.
 // Routes are relative (no /ojs/v1 prefix) — mount at /ojs/v1.
 func (m *MemoryBackend) Router() chi.Router {
@@ -159,6 +290,7 @@ func nowFormatted() string {
 
 func writeJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/openjobspec+json")
+	w.Header().Set("OJS-Version", "1.0")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(data)
 }
@@ -171,38 +303,47 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 
 func (m *MemoryBackend) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"status": "ok",
+		"status":  "ok",
 		"backend": "memory",
 	})
 }
 
 func (m *MemoryBackend) handleCreateJob(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		ID      string          `json:"id,omitempty"`
-		Type    string          `json:"type"`
-		Args    json.RawMessage `json:"args"`
-		Meta    json.RawMessage `json:"meta,omitempty"`
-		Options *struct {
-			Queue       string `json:"queue,omitempty"`
-			Priority    *int   `json:"priority,omitempty"`
-			TimeoutMs   *int   `json:"timeout_ms,omitempty"`
-			ScheduledAt string `json:"scheduled_at,omitempty"`
-			Tags        []string `json:"tags,omitempty"`
-		} `json:"options,omitempty"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "Invalid JSON: "+err.Error())
+	var req memoryEnqueueRequest
+	if decodeErr := httpjson.DecodeLenient(w, r, &req, httpjson.MaxProtocolRequestBytes, false); decodeErr != nil {
+		writeError(w, decodeErr.Status, "invalid_request", decodeErr.Message)
 		return
 	}
 
 	if req.Type == "" {
-		writeError(w, http.StatusUnprocessableEntity, "validation_error", "Field 'type' is required.")
+		writeError(w, http.StatusBadRequest, "validation_error", "Field 'type' is required.")
+		return
+	}
+	if len(req.Type) > httpjson.MaxTypeLength {
+		writeError(w, http.StatusRequestEntityTooLarge, "validation_error", "Field 'type' is too large.")
 		return
 	}
 
 	if req.Args == nil {
 		req.Args = json.RawMessage(`[]`)
+	}
+	if _, decodeErr := httpjson.RequireJSONArray("args", req.Args, httpjson.MaxArgsBytes, 1000); decodeErr != nil {
+		writeError(w, decodeErr.Status, "invalid_request", decodeErr.Message)
+		return
+	}
+	if req.Meta != nil {
+		if _, decodeErr := httpjson.RequireJSONObject("meta", req.Meta, httpjson.MaxMetaBytes, 1000, false); decodeErr != nil {
+			writeError(w, decodeErr.Status, "invalid_request", decodeErr.Message)
+			return
+		}
+	}
+	if len(req.ID) > httpjson.MaxWorkerIDLength {
+		writeError(w, http.StatusRequestEntityTooLarge, "validation_error", "Field 'id' is too large.")
+		return
+	}
+	if len(req.Schema) > 2048 {
+		writeError(w, http.StatusRequestEntityTooLarge, "validation_error", "Field 'schema' is too large.")
+		return
 	}
 
 	id := req.ID
@@ -211,60 +352,160 @@ func (m *MemoryBackend) handleCreateJob(w http.ResponseWriter, r *http.Request) 
 		id = uid.String()
 	}
 
-	now := nowFormatted()
+	currentTime := time.Now().UTC()
+	now := currentTime.Format("2006-01-02T15:04:05.000Z")
 	job := &MemoryJob{
+		SpecVersion: "1.0",
 		ID:          id,
 		Type:        req.Type,
 		State:       StateAvailable,
 		Queue:       "default",
 		Args:        req.Args,
 		Meta:        req.Meta,
+		Schema:      req.Schema,
 		Priority:    0,
 		Attempt:     0,
 		MaxAttempts: 3,
 		CreatedAt:   now,
 		EnqueuedAt:  now,
+		Extensions:  cloneRawMap(req.Extensions),
 	}
 
 	if req.Options != nil {
 		if req.Options.Queue != "" {
+			if len(req.Options.Queue) > httpjson.MaxQueueLength {
+				writeError(w, http.StatusRequestEntityTooLarge, "validation_error", "Field 'options.queue' is too large.")
+				return
+			}
 			job.Queue = req.Options.Queue
 		}
 		if req.Options.Priority != nil {
+			if *req.Options.Priority < -100 || *req.Options.Priority > 100 {
+				writeError(w, http.StatusBadRequest, "validation_error", "Field 'options.priority' is out of range.")
+				return
+			}
 			job.Priority = *req.Options.Priority
 		}
 		if req.Options.TimeoutMs != nil {
+			if *req.Options.TimeoutMs < 0 || *req.Options.TimeoutMs > 24*60*60*1000 {
+				writeError(w, http.StatusBadRequest, "validation_error", "Field 'options.timeout_ms' is out of range.")
+				return
+			}
 			job.TimeoutMs = req.Options.TimeoutMs
 		}
+		if req.Options.VisibilityTimeoutMs != nil {
+			if *req.Options.VisibilityTimeoutMs < 1000 || *req.Options.VisibilityTimeoutMs > 24*60*60*1000 {
+				writeError(w, http.StatusBadRequest, "validation_error", "Field 'options.visibility_timeout_ms' is out of range.")
+				return
+			}
+			job.VisibilityTimeoutMs = req.Options.VisibilityTimeoutMs
+		}
 		if req.Options.Tags != nil {
+			if len(req.Options.Tags) > httpjson.MaxStringListItems {
+				writeError(w, http.StatusRequestEntityTooLarge, "validation_error", "Field 'options.tags' has too many items.")
+				return
+			}
+			for _, tag := range req.Options.Tags {
+				if len(tag) > 128 {
+					writeError(w, http.StatusRequestEntityTooLarge, "validation_error", "A tag is too large.")
+					return
+				}
+			}
 			job.Tags = req.Options.Tags
 		}
-		if req.Options.ScheduledAt != "" {
-			job.State = StateScheduled
-			job.ScheduledAt = req.Options.ScheduledAt
+		scheduledAt := req.Options.DelayUntil
+		if scheduledAt == "" {
+			scheduledAt = req.Options.ScheduledAt
+		}
+		if scheduledAt != "" {
+			if len(scheduledAt) > 64 {
+				writeError(w, http.StatusRequestEntityTooLarge, "validation_error", "Field 'options.delay_until' is too large.")
+				return
+			}
+			parsed, err := time.Parse(time.RFC3339, scheduledAt)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, "validation_error", "Field 'options.delay_until' must be an RFC 3339 timestamp.")
+				return
+			}
+			job.ScheduledAt = scheduledAt
+			if parsed.After(currentTime) {
+				job.State = StateScheduled
+				job.EnqueuedAt = ""
+			}
+		}
+		if req.Options.ExpiresAt != "" {
+			if len(req.Options.ExpiresAt) > 64 {
+				writeError(w, http.StatusRequestEntityTooLarge, "validation_error", "Field 'options.expires_at' is too large.")
+				return
+			}
+			if _, err := time.Parse(time.RFC3339, req.Options.ExpiresAt); err != nil {
+				writeError(w, http.StatusBadRequest, "validation_error", "Field 'options.expires_at' must be an RFC 3339 timestamp.")
+				return
+			}
+			job.ExpiresAt = req.Options.ExpiresAt
+		}
+		if req.Options.Retry != nil {
+			if _, decodeErr := httpjson.RequireJSONObject("options.retry", req.Options.Retry, httpjson.MaxMetaBytes, 100, false); decodeErr != nil {
+				writeError(w, decodeErr.Status, "invalid_request", decodeErr.Message)
+				return
+			}
+			var retry struct {
+				MaxAttempts *int `json:"max_attempts,omitempty"`
+			}
+			if err := json.Unmarshal(req.Options.Retry, &retry); err != nil {
+				writeError(w, http.StatusBadRequest, "validation_error", "Field 'options.retry' is invalid.")
+				return
+			}
+			if retry.MaxAttempts != nil {
+				if *retry.MaxAttempts < 0 || *retry.MaxAttempts > 1000 {
+					writeError(w, http.StatusBadRequest, "validation_error", "Field 'options.retry.max_attempts' is out of range.")
+					return
+				}
+				job.MaxAttempts = *retry.MaxAttempts
+			}
+			job.Retry = cloneRawMessage(req.Options.Retry)
+		}
+		if req.Options.Unique != nil {
+			if _, decodeErr := httpjson.RequireJSONObject("options.unique", req.Options.Unique, httpjson.MaxMetaBytes, 100, false); decodeErr != nil {
+				writeError(w, decodeErr.Status, "invalid_request", decodeErr.Message)
+				return
+			}
+			job.Unique = cloneRawMessage(req.Options.Unique)
 		}
 	}
 
 	m.mu.Lock()
+	if _, exists := m.jobs[job.ID]; exists {
+		m.mu.Unlock()
+		writeError(w, http.StatusConflict, "duplicate", "Job already exists: "+job.ID)
+		return
+	}
 	m.jobs[job.ID] = job
 	if job.State == StateAvailable {
 		m.addToQueue(job)
 	}
+	callbackJob := cloneMemoryJob(job)
+	responseJob := cloneMemoryJob(job)
 	m.mu.Unlock()
 
 	if m.onStateChange != nil {
-		m.onStateChange(job, "", job.State)
+		m.onStateChange(callbackJob, "", callbackJob.State)
 	}
 
-	w.Header().Set("Location", "/ojs/v1/jobs/"+job.ID)
-	writeJSON(w, http.StatusCreated, map[string]any{"job": job})
+	w.Header().Set("Location", "/ojs/v1/jobs/"+responseJob.ID)
+	writeJSON(w, http.StatusCreated, map[string]any{"job": responseJob})
 }
 
 func (m *MemoryBackend) handleGetJob(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if len(id) == 0 || len(id) > httpjson.MaxWorkerIDLength {
+		writeError(w, http.StatusBadRequest, "validation_error", "Job ID is invalid.")
+		return
+	}
 
 	m.mu.RLock()
 	job, ok := m.jobs[id]
+	snapshot := cloneMemoryJob(job)
 	m.mu.RUnlock()
 
 	if !ok {
@@ -272,11 +513,15 @@ func (m *MemoryBackend) handleGetJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"job": job})
+	writeJSON(w, http.StatusOK, map[string]any{"job": snapshot})
 }
 
 func (m *MemoryBackend) handleCancelJob(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if len(id) == 0 || len(id) > httpjson.MaxWorkerIDLength {
+		writeError(w, http.StatusBadRequest, "validation_error", "Job ID is invalid.")
+		return
+	}
 
 	m.mu.Lock()
 	job, ok := m.jobs[id]
@@ -297,13 +542,15 @@ func (m *MemoryBackend) handleCancelJob(w http.ResponseWriter, r *http.Request) 
 	job.State = StateCancelled
 	job.CancelledAt = nowFormatted()
 	m.removeFromQueue(job)
+	callbackJob := cloneMemoryJob(job)
+	responseJob := cloneMemoryJob(job)
 	m.mu.Unlock()
 
 	if m.onStateChange != nil {
-		m.onStateChange(job, fromState, StateCancelled)
+		m.onStateChange(callbackJob, fromState, StateCancelled)
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"job": job})
+	writeJSON(w, http.StatusOK, map[string]any{"job": responseJob})
 }
 
 func (m *MemoryBackend) handleFetch(w http.ResponseWriter, r *http.Request) {
@@ -313,20 +560,42 @@ func (m *MemoryBackend) handleFetch(w http.ResponseWriter, r *http.Request) {
 		WorkerID string   `json:"worker_id,omitempty"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "Invalid JSON: "+err.Error())
+	if decodeErr := httpjson.DecodeLenient(w, r, &req, 64<<10, false); decodeErr != nil {
+		writeError(w, decodeErr.Status, "invalid_request", decodeErr.Message)
 		return
 	}
 
 	if len(req.Queues) == 0 {
 		req.Queues = []string{"default"}
 	}
+	if len(req.Queues) > httpjson.MaxStringListItems {
+		writeError(w, http.StatusRequestEntityTooLarge, "validation_error", "Field 'queues' has too many items.")
+		return
+	}
+	for _, queue := range req.Queues {
+		if len(queue) == 0 || len(queue) > httpjson.MaxQueueLength {
+			writeError(w, http.StatusBadRequest, "validation_error", "Field 'queues' contains an invalid queue.")
+			return
+		}
+	}
+	if len(req.WorkerID) > httpjson.MaxWorkerIDLength {
+		writeError(w, http.StatusRequestEntityTooLarge, "validation_error", "Field 'worker_id' is too large.")
+		return
+	}
 	if req.Count <= 0 {
 		req.Count = 1
 	}
+	if req.Count > httpjson.MaxFetchCount {
+		req.Count = httpjson.MaxFetchCount
+	}
 
 	m.mu.Lock()
-	var fetched []*MemoryJob
+	fetched := make([]*MemoryJob, 0)
+	type pendingChange struct {
+		job       *MemoryJob
+		fromState string
+	}
+	var changes []pendingChange
 	for _, q := range req.Queues {
 		if len(fetched) >= req.Count {
 			break
@@ -343,16 +612,21 @@ func (m *MemoryBackend) handleFetch(w http.ResponseWriter, r *http.Request) {
 			job.State = StateActive
 			job.StartedAt = nowFormatted()
 			job.Attempt++
-			fetched = append(fetched, job)
-			if m.onStateChange != nil {
-				defer func(j *MemoryJob, fs string) {
-					m.onStateChange(j, fs, StateActive)
-				}(job, fromState)
-			}
+			fetched = append(fetched, cloneMemoryJob(job))
+			changes = append(changes, pendingChange{job: cloneMemoryJob(job), fromState: fromState})
 		}
 		m.queues[q] = jobs[take:]
 	}
 	m.mu.Unlock()
+
+	// Fire state-change callbacks after releasing the lock, in fetch order —
+	// consistent with the other handlers. (Previously these were deferred to
+	// the end of the handler, so they ran after the response, in reverse order.)
+	if m.onStateChange != nil {
+		for _, c := range changes {
+			m.onStateChange(c.job, c.fromState, StateActive)
+		}
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"jobs": fetched})
 }
@@ -363,9 +637,19 @@ func (m *MemoryBackend) handleAck(w http.ResponseWriter, r *http.Request) {
 		Result json.RawMessage `json:"result,omitempty"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "Invalid JSON: "+err.Error())
+	if decodeErr := httpjson.DecodeLenient(w, r, &req, httpjson.MaxProtocolRequestBytes, false); decodeErr != nil {
+		writeError(w, decodeErr.Status, "invalid_request", decodeErr.Message)
 		return
+	}
+	if len(req.JobID) == 0 || len(req.JobID) > httpjson.MaxWorkerIDLength {
+		writeError(w, http.StatusBadRequest, "validation_error", "Field 'job_id' is invalid.")
+		return
+	}
+	if req.Result != nil {
+		if decodeErr := httpjson.RequireRawJSON("result", req.Result, httpjson.MaxOutputBytes, false); decodeErr != nil {
+			writeError(w, decodeErr.Status, "invalid_request", decodeErr.Message)
+			return
+		}
 	}
 
 	m.mu.Lock()
@@ -387,15 +671,17 @@ func (m *MemoryBackend) handleAck(w http.ResponseWriter, r *http.Request) {
 	job.State = StateCompleted
 	job.CompletedAt = nowFormatted()
 	if req.Result != nil {
-		job.Result = req.Result
+		job.Result = cloneRawMessage(req.Result)
 	}
+	callbackJob := cloneMemoryJob(job)
+	responseJob := cloneMemoryJob(job)
 	m.mu.Unlock()
 
 	if m.onStateChange != nil {
-		m.onStateChange(job, fromState, StateCompleted)
+		m.onStateChange(callbackJob, fromState, StateCompleted)
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"job": job})
+	writeJSON(w, http.StatusOK, map[string]any{"job": responseJob})
 }
 
 func (m *MemoryBackend) handleNack(w http.ResponseWriter, r *http.Request) {
@@ -405,9 +691,19 @@ func (m *MemoryBackend) handleNack(w http.ResponseWriter, r *http.Request) {
 		Requeue bool            `json:"requeue,omitempty"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "Invalid JSON: "+err.Error())
+	if decodeErr := httpjson.DecodeLenient(w, r, &req, httpjson.MaxProtocolRequestBytes, false); decodeErr != nil {
+		writeError(w, decodeErr.Status, "invalid_request", decodeErr.Message)
 		return
+	}
+	if len(req.JobID) == 0 || len(req.JobID) > httpjson.MaxWorkerIDLength {
+		writeError(w, http.StatusBadRequest, "validation_error", "Field 'job_id' is invalid.")
+		return
+	}
+	if req.Error != nil {
+		if decodeErr := httpjson.RequireRawJSON("error", req.Error, httpjson.MaxErrorBytes, false); decodeErr != nil {
+			writeError(w, decodeErr.Status, "invalid_request", decodeErr.Message)
+			return
+		}
 	}
 
 	m.mu.Lock()
@@ -433,7 +729,7 @@ func (m *MemoryBackend) handleNack(w http.ResponseWriter, r *http.Request) {
 
 	job.State = targetState
 	if req.Error != nil {
-		job.Error = req.Error
+		job.Error = cloneRawMessage(req.Error)
 	}
 
 	// If retryable, re-add to available after a brief moment
@@ -441,18 +737,19 @@ func (m *MemoryBackend) handleNack(w http.ResponseWriter, r *http.Request) {
 		job.State = StateAvailable
 		m.addToQueue(job)
 	}
+	callbackJob := cloneMemoryJob(job)
+	responseJob := cloneMemoryJob(job)
 	m.mu.Unlock()
 
 	if m.onStateChange != nil {
-		m.onStateChange(job, fromState, targetState)
+		m.onStateChange(callbackJob, fromState, targetState)
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"job": job})
+	writeJSON(w, http.StatusOK, map[string]any{"job": responseJob})
 }
 
 func (m *MemoryBackend) handleListQueues(w http.ResponseWriter, r *http.Request) {
 	m.mu.RLock()
-	defer m.mu.RUnlock()
 
 	type queueInfo struct {
 		Name      string `json:"name"`
@@ -475,6 +772,7 @@ func (m *MemoryBackend) handleListQueues(w http.ResponseWriter, r *http.Request)
 			seen[j.Queue] = true
 		}
 	}
+	m.mu.RUnlock()
 
 	writeJSON(w, http.StatusOK, map[string]any{"queues": queues})
 }
@@ -507,7 +805,7 @@ func (m *MemoryBackend) GetJob(id string) (*MemoryJob, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	j, ok := m.jobs[id]
-	return j, ok
+	return cloneMemoryJob(j), ok
 }
 
 // ListJobs returns all jobs (for use by API handlers).
@@ -517,7 +815,7 @@ func (m *MemoryBackend) ListJobs() []*MemoryJob {
 
 	jobs := make([]*MemoryJob, 0, len(m.jobs))
 	for _, j := range m.jobs {
-		jobs = append(jobs, j)
+		jobs = append(jobs, cloneMemoryJob(j))
 	}
 	return jobs
 }

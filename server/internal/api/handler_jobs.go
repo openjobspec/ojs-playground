@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/openjobspec/ojs-playground/server/internal/backends"
 	"github.com/openjobspec/ojs-playground/server/internal/history"
+	"github.com/openjobspec/ojs-playground/server/internal/httpjson"
 	"github.com/openjobspec/ojs-playground/server/internal/sse"
 )
 
@@ -41,21 +41,39 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Options json.RawMessage `json:"options,omitempty"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteError(w, http.StatusBadRequest, "Invalid JSON: "+err.Error())
+	if decodeErr := httpjson.Decode(w, r, &req, httpjson.MaxAPIRequestBytes, false); decodeErr != nil {
+		WriteError(w, decodeErr.Status, decodeErr.Message)
 		return
 	}
 
 	if req.Type == "" {
-		WriteError(w, http.StatusUnprocessableEntity, "Field 'type' is required.")
+		WriteError(w, http.StatusBadRequest, "Field 'type' is required.")
+		return
+	}
+	if len(req.Type) > httpjson.MaxTypeLength {
+		WriteError(w, http.StatusRequestEntityTooLarge, "Field 'type' is too large.")
 		return
 	}
 
 	if req.Args == nil {
 		req.Args = json.RawMessage(`[]`)
 	}
+	if _, decodeErr := httpjson.RequireJSONArray("args", req.Args, httpjson.MaxArgsBytes, 1000); decodeErr != nil {
+		WriteError(w, decodeErr.Status, decodeErr.Message)
+		return
+	}
 	if req.Queue == "" {
 		req.Queue = "default"
+	}
+	if len(req.Queue) > httpjson.MaxQueueLength {
+		WriteError(w, http.StatusRequestEntityTooLarge, "Field 'queue' is too large.")
+		return
+	}
+	if req.Options != nil {
+		if _, decodeErr := httpjson.RequireJSONObject("options", req.Options, httpjson.MaxMetaBytes, 1000, false); decodeErr != nil {
+			WriteError(w, decodeErr.Status, decodeErr.Message)
+			return
+		}
 	}
 
 	uid, _ := uuid.NewV7()
@@ -105,18 +123,25 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 // List handles GET /api/jobs.
 func (h *JobHandler) List(w http.ResponseWriter, r *http.Request) {
+	if len(r.URL.Query().Get("state")) > 32 ||
+		len(r.URL.Query().Get("type")) > httpjson.MaxTypeLength ||
+		len(r.URL.Query().Get("queue")) > httpjson.MaxQueueLength {
+		WriteError(w, http.StatusRequestEntityTooLarge, "A job filter is too large.")
+		return
+	}
 	filter := history.ListFilter{
 		State: r.URL.Query().Get("state"),
 		Type:  r.URL.Query().Get("type"),
 		Queue: r.URL.Query().Get("queue"),
 	}
 
-	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		filter.Limit, _ = strconv.Atoi(limitStr)
+	limit, offset, paginationErr := parsePagination(r, 50, httpjson.MaxListLimit)
+	if paginationErr != nil {
+		WriteError(w, paginationErr.Status, paginationErr.Message)
+		return
 	}
-	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
-		filter.Offset, _ = strconv.Atoi(offsetStr)
-	}
+	filter.Limit = limit
+	filter.Offset = offset
 
 	if h.store == nil {
 		WriteJSON(w, http.StatusOK, map[string]any{"jobs": []any{}, "total": 0})
@@ -139,9 +164,55 @@ func (h *JobHandler) List(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// GetHistory handles GET /api/jobs/{id}/history.
+func (h *JobHandler) GetHistory(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if len(id) == 0 || len(id) > httpjson.MaxWorkerIDLength {
+		WriteError(w, http.StatusBadRequest, "Job ID is invalid.")
+		return
+	}
+	if h.store == nil {
+		WriteError(w, http.StatusNotFound, "Job not found: "+id)
+		return
+	}
+	if _, err := h.store.GetJob(r.Context(), id); err != nil {
+		WriteError(w, http.StatusNotFound, "Job not found: "+id)
+		return
+	}
+
+	limit, offset, paginationErr := parsePagination(r, 100, httpjson.MaxHistoryLimit)
+	if paginationErr != nil {
+		WriteError(w, paginationErr.Status, paginationErr.Message)
+		return
+	}
+	stateHistory, err := h.store.GetJobHistory(r.Context(), id)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "Failed to load job history: "+err.Error())
+		return
+	}
+	total := len(stateHistory)
+	if offset > total {
+		offset = total
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{
+		"history": stateHistory[offset:end],
+		"total":   total,
+		"limit":   limit,
+		"offset":  offset,
+	})
+}
+
 // Get handles GET /api/jobs/{id}.
 func (h *JobHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if len(id) == 0 || len(id) > httpjson.MaxWorkerIDLength {
+		WriteError(w, http.StatusBadRequest, "Job ID is invalid.")
+		return
+	}
 
 	if h.store == nil {
 		WriteError(w, http.StatusNotFound, "Job not found: "+id)
@@ -157,6 +228,8 @@ func (h *JobHandler) Get(w http.ResponseWriter, r *http.Request) {
 	stateHistory, _ := h.store.GetJobHistory(r.Context(), id)
 	if stateHistory == nil {
 		stateHistory = []history.StateChange{}
+	} else if len(stateHistory) > httpjson.MaxHistoryLimit {
+		stateHistory = stateHistory[len(stateHistory)-httpjson.MaxHistoryLimit:]
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]any{
@@ -168,6 +241,10 @@ func (h *JobHandler) Get(w http.ResponseWriter, r *http.Request) {
 // Cancel handles DELETE /api/jobs/{id}.
 func (h *JobHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if len(id) == 0 || len(id) > httpjson.MaxWorkerIDLength {
+		WriteError(w, http.StatusBadRequest, "Job ID is invalid.")
+		return
+	}
 
 	if h.store == nil {
 		WriteError(w, http.StatusNotFound, "Job not found: "+id)
@@ -207,6 +284,10 @@ func (h *JobHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 // Retry handles POST /api/jobs/{id}/retry.
 func (h *JobHandler) Retry(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if len(id) == 0 || len(id) > httpjson.MaxWorkerIDLength {
+		WriteError(w, http.StatusBadRequest, "Job ID is invalid.")
+		return
+	}
 
 	if h.store == nil {
 		WriteError(w, http.StatusNotFound, "Job not found: "+id)

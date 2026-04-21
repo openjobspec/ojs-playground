@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 
@@ -16,16 +17,17 @@ import (
 
 // RouteDeps holds all dependencies needed for route registration.
 type RouteDeps struct {
-	Store           history.Store
-	Broadcaster     *sse.Broadcaster
-	BackendManager  *backends.Manager
-	MemoryBackend   *backends.MemoryBackend
-	ChaosConfig     *chaos.Config
-	WorkerRegistry  *discovery.Registry
-	Port            int
-	BackendNames    []string
-	SuitesDir       string
-	OJSBaseURL      string
+	Context        context.Context
+	Store          history.Store
+	Broadcaster    *sse.Broadcaster
+	BackendManager *backends.Manager
+	MemoryBackend  *backends.MemoryBackend
+	ChaosConfig    *chaos.Config
+	WorkerRegistry *discovery.Registry
+	Port           int
+	BackendNames   []string
+	SuitesDir      string
+	OJSBaseURL     string
 }
 
 // RegisterRoutes registers all API routes on the given chi router.
@@ -48,11 +50,14 @@ func RegisterRoutes(r chi.Router, deps *RouteDeps) {
 				baseURL = fmt.Sprintf("http://localhost:%d", deps.Port)
 			}
 			runner = conformance.NewRunner(baseURL, suites, deps.Broadcaster)
+			if deps.MemoryBackend != nil && deps.BackendManager.ActiveName() == "memory" {
+				runner.SetTestReset(deps.MemoryBackend.Reset)
+			}
 			slog.Info("conformance runner initialized", "suites", suites.Count(), "dir", deps.SuitesDir)
 		}
 	}
 
-	conformanceHandler := NewConformanceHandler(runner)
+	conformanceHandler := NewConformanceHandler(deps.Context, runner, ConformanceHandlerOptions{})
 	sseHandler := sse.NewHandler(deps.Broadcaster)
 
 	r.Route("/api", func(r chi.Router) {
@@ -63,6 +68,7 @@ func RegisterRoutes(r chi.Router, deps *RouteDeps) {
 		r.Post("/jobs", jobHandler.Create)
 		r.Get("/jobs", jobHandler.List)
 		r.Get("/jobs/{id}", jobHandler.Get)
+		r.Get("/jobs/{id}/history", jobHandler.GetHistory)
 		r.Delete("/jobs/{id}", jobHandler.Cancel)
 		r.Post("/jobs/{id}/retry", jobHandler.Retry)
 
@@ -86,6 +92,7 @@ func RegisterRoutes(r chi.Router, deps *RouteDeps) {
 		// Conformance
 		r.Post("/conformance/run", conformanceHandler.Run)
 		r.Get("/conformance/run/{id}", conformanceHandler.GetRun)
+		r.Delete("/conformance/run/{id}", conformanceHandler.CancelRun)
 		r.Get("/conformance/run/{id}/report", conformanceHandler.GetReport)
 
 		// SSE events

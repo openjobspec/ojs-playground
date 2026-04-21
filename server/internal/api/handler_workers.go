@@ -1,13 +1,14 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/openjobspec/ojs-playground/server/internal/discovery"
+	"github.com/openjobspec/ojs-playground/server/internal/httpjson"
 )
 
 // WorkerHandler handles worker discovery endpoints.
@@ -43,13 +44,49 @@ func (h *WorkerHandler) Register(w http.ResponseWriter, r *http.Request) {
 		JobTypes []string `json:"job_types,omitempty"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteError(w, http.StatusBadRequest, "Invalid JSON: "+err.Error())
+	if decodeErr := httpjson.Decode(w, r, &req, 64<<10, false); decodeErr != nil {
+		WriteError(w, decodeErr.Status, decodeErr.Message)
 		return
 	}
 
 	if req.URL == "" {
-		WriteError(w, http.StatusUnprocessableEntity, "Field 'url' is required.")
+		WriteError(w, http.StatusBadRequest, "Field 'url' is required.")
+		return
+	}
+	if len(req.Name) > 128 || len(req.URL) > 2048 {
+		WriteError(w, http.StatusRequestEntityTooLarge, "Worker name or URL is too large.")
+		return
+	}
+	parsedURL, err := url.ParseRequestURI(req.URL)
+	if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") || parsedURL.Host == "" {
+		WriteError(w, http.StatusBadRequest, "Field 'url' must be an absolute HTTP(S) URL.")
+		return
+	}
+	if req.Port < 0 || req.Port > 65535 {
+		WriteError(w, http.StatusBadRequest, "Field 'port' is out of range.")
+		return
+	}
+	if len(req.Queues) > httpjson.MaxStringListItems || len(req.JobTypes) > httpjson.MaxStringListItems {
+		WriteError(w, http.StatusRequestEntityTooLarge, "Worker queue or job type list is too large.")
+		return
+	}
+	for _, queue := range req.Queues {
+		if len(queue) == 0 || len(queue) > httpjson.MaxQueueLength {
+			WriteError(w, http.StatusBadRequest, "Worker queues contain an invalid value.")
+			return
+		}
+	}
+	for _, jobType := range req.JobTypes {
+		if len(jobType) == 0 || len(jobType) > httpjson.MaxTypeLength {
+			WriteError(w, http.StatusBadRequest, "Worker job types contain an invalid value.")
+			return
+		}
+	}
+	if req.Name == "" {
+		req.Name = parsedURL.Hostname()
+	}
+	if req.Name == "" {
+		WriteError(w, http.StatusBadRequest, "Field 'name' is required.")
 		return
 	}
 

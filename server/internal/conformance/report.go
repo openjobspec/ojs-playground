@@ -8,19 +8,19 @@ import (
 
 // Report represents a conformance test report.
 type Report struct {
-	Run     *RunResult         `json:"run"`
-	Summary *ReportSummary     `json:"summary"`
+	Run     *RunResult            `json:"run"`
+	Summary *ReportSummary        `json:"summary"`
 	Levels  map[int]*LevelSummary `json:"levels"`
 }
 
 // ReportSummary is the top-level summary.
 type ReportSummary struct {
-	Total      int     `json:"total"`
-	Passed     int     `json:"passed"`
-	Failed     int     `json:"failed"`
-	Skipped    int     `json:"skipped"`
-	PassRate   float64 `json:"pass_rate"`
-	MaxLevel   int     `json:"max_conformance_level"`
+	Total    int     `json:"total"`
+	Passed   int     `json:"passed"`
+	Failed   int     `json:"failed"`
+	Skipped  int     `json:"skipped"`
+	PassRate float64 `json:"pass_rate"`
+	MaxLevel int     `json:"max_conformance_level"`
 }
 
 // LevelSummary summarizes results for a conformance level.

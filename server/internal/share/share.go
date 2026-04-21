@@ -1,15 +1,16 @@
 package share
 
 import (
-	"compress/gzip"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/openjobspec/ojs-playground/server/internal/httpjson"
 )
 
 // --- Shareable Playground Links ---
@@ -30,12 +31,12 @@ type PlaygroundState struct {
 
 // ShareableLink holds a persisted playground state.
 type ShareableLink struct {
-	ID         string          `json:"id"`
-	State      PlaygroundState `json:"state"`
-	CreatedAt  time.Time       `json:"created_at"`
-	ExpiresAt  time.Time       `json:"expires_at"`
-	ViewCount  int64           `json:"view_count"`
-	CreatedBy  string          `json:"created_by,omitempty"`
+	ID        string          `json:"id"`
+	State     PlaygroundState `json:"state"`
+	CreatedAt time.Time       `json:"created_at"`
+	ExpiresAt time.Time       `json:"expires_at"`
+	ViewCount int64           `json:"view_count"`
+	CreatedBy string          `json:"created_by,omitempty"`
 }
 
 // LinkStore persists shareable playground links.
@@ -130,26 +131,26 @@ func EncodeStateToURL(state PlaygroundState) (string, error) {
 		return "", err
 	}
 
-	// Gzip compress
-	var buf []byte
-	w, _ := gzip.NewWriterLevel(nil, gzip.BestCompression)
-	_ = w // We'll use a simpler approach for URL encoding
-
-	// For URL safety, just base64url-encode the JSON
-	encoded := base64.RawURLEncoding.EncodeToString(data)
-	_ = buf
-	return encoded, nil
+	return base64.RawURLEncoding.EncodeToString(data), nil
 }
 
 // DecodeStateFromURL decodes a URL-encoded playground state.
 func DecodeStateFromURL(encoded string) (*PlaygroundState, error) {
+	if len(encoded) > 2<<20 {
+		return nil, fmt.Errorf("encoded state is too large")
+	}
 	data, err := base64.RawURLEncoding.DecodeString(encoded)
 	if err != nil {
 		return nil, fmt.Errorf("decoding base64: %w", err)
 	}
+	if len(data) > 1<<20 {
+		return nil, fmt.Errorf("decoded state is too large")
+	}
 
 	var state PlaygroundState
-	if err := json.Unmarshal(data, &state); err != nil {
+	decoder := json.NewDecoder(strings.NewReader(string(data)))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&state); err != nil {
 		return nil, fmt.Errorf("unmarshaling state: %w", err)
 	}
 	return &state, nil
@@ -165,16 +166,27 @@ func HandleShareCreate(store *LinkStore) http.HandlerFunc {
 			return
 		}
 
-		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20)) // 1MB limit
-		if err != nil {
-			http.Error(w, "reading body", http.StatusBadRequest)
+		var state PlaygroundState
+		if decodeErr := httpjson.Decode(w, r, &state, httpjson.MaxAPIRequestBytes, false); decodeErr != nil {
+			http.Error(w, decodeErr.Message, decodeErr.Status)
 			return
 		}
 
-		var state PlaygroundState
-		if err := json.Unmarshal(body, &state); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
+		if len(state.Version) > 16 || len(state.Language) > 32 || len(state.Backend) > 64 ||
+			len(state.BackendURL) > 2048 || len(state.Tab) > 64 || len(state.Title) > 256 ||
+			len(state.Description) > 4096 || len(state.Code) > 512<<10 {
+			http.Error(w, "share field is too large", http.StatusRequestEntityTooLarge)
 			return
+		}
+		if _, decodeErr := httpjson.RequireJSONObject("schema", state.Schema, httpjson.MaxMetaBytes, 1000, true); decodeErr != nil {
+			http.Error(w, decodeErr.Message, decodeErr.Status)
+			return
+		}
+		if len(state.Jobs) > 0 {
+			if _, decodeErr := httpjson.RequireJSONArray("jobs", state.Jobs, httpjson.MaxArgsBytes, 1000); decodeErr != nil {
+				http.Error(w, decodeErr.Message, decodeErr.Status)
+				return
+			}
 		}
 
 		link, err := store.Create(state)
@@ -216,11 +228,11 @@ func HandleShareGet(store *LinkStore) http.HandlerFunc {
 
 // BackendConnection represents a live connection to an OJS backend.
 type BackendConnection struct {
-	URL       string `json:"url"`
-	Status    string `json:"status"` // connected, disconnected, error
-	Backend   string `json:"backend,omitempty"` // redis, postgres, nats, etc.
-	Version   string `json:"version,omitempty"`
-	Latency   int64  `json:"latency_ms"`
+	URL       string    `json:"url"`
+	Status    string    `json:"status"`            // connected, disconnected, error
+	Backend   string    `json:"backend,omitempty"` // redis, postgres, nats, etc.
+	Version   string    `json:"version,omitempty"`
+	Latency   int64     `json:"latency_ms"`
 	LastCheck time.Time `json:"last_check"`
 }
 
