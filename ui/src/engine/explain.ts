@@ -3,6 +3,19 @@ import { parseDuration } from './duration'
 import { formatDuration } from './duration'
 
 /**
+ * Format a retry interval for display. Falls back to the raw value when it is
+ * not a valid ISO 8601 duration so malformed-but-parseable specs never throw
+ * (explainJob runs on any parseable job, before schema validation).
+ */
+function describeInterval(iso: string): string {
+  try {
+    return formatDuration(parseDuration(iso))
+  } catch {
+    return iso
+  }
+}
+
+/**
  * Generate a plain-English explanation of an OJS job spec.
  * No AI required — fully template-driven.
  */
@@ -43,8 +56,7 @@ export function explainJob(job: OJSJob): string[] {
     const parts: string[] = [`up to **${maxAttempts}** attempts`]
 
     if (r.initial_interval) {
-      const ms = parseDuration(r.initial_interval)
-      parts.push(`starting with a **${formatDuration(ms)}** delay`)
+      parts.push(`starting with a **${describeInterval(r.initial_interval)}** delay`)
     }
 
     if (r.backoff_coefficient && r.backoff_coefficient > 1) {
@@ -52,8 +64,7 @@ export function explainJob(job: OJSJob): string[] {
     }
 
     if (r.max_interval) {
-      const ms = parseDuration(r.max_interval)
-      parts.push(`capped at **${formatDuration(ms)}**`)
+      parts.push(`capped at **${describeInterval(r.max_interval)}**`)
     }
 
     if (r.jitter) {
@@ -91,4 +102,30 @@ export function explainJob(job: OJSJob): string[] {
   }
 
   return lines
+}
+
+/**
+ * Escape HTML metacharacters so untrusted text can be safely embedded in markup.
+ * Must run before any intentional markup is added.
+ */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+/**
+ * Render a single explanation line to safe HTML. Explanation lines interpolate
+ * user-controlled job fields (type, queue, args, cron expression, meta keys,
+ * …), so the raw text is HTML-escaped first and only the intended **bold** and
+ * `code` markers are then expanded. This prevents DOM XSS when the result is
+ * assigned via dangerouslySetInnerHTML (e.g. from a shared deep link).
+ */
+export function explainLineToHtml(line: string): string {
+  return escapeHtml(line)
+    .replace(/\*\*(.*?)\*\*/g, '<strong class="text-foreground">$1</strong>')
+    .replace(/`(.*?)`/g, '<code class="bg-muted px-0.5 rounded text-[10px]">$1</code>')
 }

@@ -1,14 +1,16 @@
 import type { CodeGenContext, CodegenLanguage, OJSJob } from '../types'
+import {
+  safeCamelIdentifier,
+  safePascalIdentifier,
+  safeSnakeIdentifier,
+} from './literals'
 
 /**
  * Convert a dot-separated job type to PascalCase.
  * e.g., "email.send" -> "EmailSend"
  */
 function toPascalCase(jobType: string): string {
-  return jobType
-    .split('.')
-    .map((seg) => seg.charAt(0).toUpperCase() + seg.slice(1))
-    .join('')
+  return safePascalIdentifier(jobType)
 }
 
 /**
@@ -16,16 +18,15 @@ function toPascalCase(jobType: string): string {
  * e.g., "email.send" -> "emailSend"
  */
 function toCamelCase(jobType: string): string {
-  const pascal = toPascalCase(jobType)
-  return pascal.charAt(0).toLowerCase() + pascal.slice(1)
+  return safeCamelIdentifier(jobType)
 }
 
 /**
  * Convert a dot-separated job type to snake_case.
  * e.g., "email.send" -> "email_send"
  */
-function toSnakeCase(jobType: string): string {
-  return jobType.replace(/\./g, '_')
+function toSnakeCase(jobType: string, language: CodegenLanguage): string {
+  return safeSnakeIdentifier(jobType, 'job', language === 'rust' ? 'rust' : 'python')
 }
 
 /**
@@ -66,7 +67,7 @@ export function buildContext(job: OJSJob, language: CodegenLanguage): CodeGenCon
     jobType: job.type,
     jobTypePascal: toPascalCase(job.type),
     jobTypeCamel: toCamelCase(job.type),
-    jobTypeSnake: toSnakeCase(job.type),
+    jobTypeSnake: toSnakeCase(job.type, language),
     queue: job.queue,
     args: job.args,
     argsTyped,

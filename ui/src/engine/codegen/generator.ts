@@ -1,5 +1,22 @@
 import type { CodegenLanguage, CodegenScope, OJSJob } from '../types'
 import { buildContext } from './context'
+import {
+  booleanLiteral,
+  goLiteral,
+  goString,
+  integerLiteral,
+  javaLiteral,
+  javaString,
+  jsLiteral,
+  jsString,
+  numberLiteral,
+  pythonLiteral,
+  pythonString,
+  rubyLiteral,
+  rubyString,
+  rustLiteral,
+  rustString,
+} from './literals'
 
 // ---- Go Templates ----
 
@@ -9,22 +26,23 @@ function goArgsLiteral(args: unknown[]): string {
     const key = typeof arg === 'string' && i === 0 ? 'to' :
                 typeof arg === 'string' && i === 1 ? 'template' :
                 `arg${i}`
-    const val = typeof arg === 'string' ? `"${arg}"` : JSON.stringify(arg)
-    return `\t\t"${key}": ${val},`
+    return `\t\t${goString(key)}: ${goLiteral(arg)},`
   })
   return `ojs.Args{\n${entries.join('\n')}\n\t}`
 }
 
 function goRetryLiteral(retry: Record<string, unknown>): string {
   const parts: string[] = []
-  if (retry.max_attempts !== undefined) parts.push(`MaxAttempts: ${retry.max_attempts}`)
-  if (retry.initial_interval) {
-    const dur = isoToGoDuration(retry.initial_interval as string)
+  const maxAttempts = integerLiteral(retry.max_attempts)
+  const backoffCoefficient = numberLiteral(retry.backoff_coefficient)
+  if (maxAttempts !== null) parts.push(`MaxAttempts: ${maxAttempts}`)
+  if (typeof retry.initial_interval === 'string') {
+    const dur = isoToGoDuration(retry.initial_interval)
     parts.push(`InitialInterval: ${dur}`)
   }
-  if (retry.backoff_coefficient !== undefined) parts.push(`BackoffCoefficient: ${retry.backoff_coefficient}`)
-  if (retry.max_interval) {
-    const dur = isoToGoDuration(retry.max_interval as string)
+  if (backoffCoefficient !== null) parts.push(`BackoffCoefficient: ${backoffCoefficient}`)
+  if (typeof retry.max_interval === 'string') {
+    const dur = isoToGoDuration(retry.max_interval)
     parts.push(`MaxInterval: ${dur}`)
   }
   return `ojs.RetryPolicy{${parts.join(', ')}}`
@@ -32,7 +50,7 @@ function goRetryLiteral(retry: Record<string, unknown>): string {
 
 function isoToGoDuration(iso: string): string {
   const match = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?$/.exec(iso)
-  if (!match) return `/* ${iso} */`
+  if (!match) return '0'
   const h = parseInt(match[1] ?? '0', 10)
   const m = parseInt(match[2] ?? '0', 10)
   const s = parseFloat(match[3] ?? '0')
@@ -46,10 +64,13 @@ function isoToGoDuration(iso: string): string {
 function generateGoEnqueue(job: OJSJob): string {
   const ctx = buildContext(job, 'go')
   const options: string[] = []
-  if (job.queue !== 'default') options.push(`\t\tojs.WithQueue("${job.queue}"),`)
+  const priority = integerLiteral(job.priority)
+  const timeout = integerLiteral(ctx.timeout)
+  if (job.queue !== 'default') options.push(`\t\tojs.WithQueue(${goString(job.queue)}),`)
   if (ctx.hasRetry) options.push(`\t\tojs.WithRetry(${goRetryLiteral(job.retry as Record<string, unknown>)}),`)
-  if (ctx.hasPriority) options.push(`\t\tojs.WithPriority(${job.priority}),`)
-  if (ctx.hasTimeout) options.push(`\t\tojs.WithTimeout(${job.timeout}*time.Second),`)
+  if (ctx.hasMeta) options.push(`\t\tojs.WithMeta(${goLiteral(job.meta)}),`)
+  if (ctx.hasPriority && priority !== null) options.push(`\t\tojs.WithPriority(${priority}),`)
+  if (ctx.hasTimeout && timeout !== null) options.push(`\t\tojs.WithTimeout(${timeout}*time.Second),`)
 
   const optionsStr = options.length > 0 ? '\n' + options.join('\n') + '\n\t' : ''
 
@@ -70,7 +91,7 @@ func main() {
 \t\tlog.Fatal(err)
 \t}
 
-\tjob, err := client.Enqueue(context.Background(), "${job.type}",
+\tjob, err := client.Enqueue(context.Background(), ${goString(job.type)},
 \t\t${goArgsLiteral(job.args)},${optionsStr})
 \tif err != nil {
 \t\tlog.Fatal(err)
@@ -88,7 +109,7 @@ function generateGoWorker(job: OJSJob): string {
                    a.type === 'int' ? 'int' :
                    a.type === 'float' ? 'float64' :
                    a.type === 'bool' ? 'bool' : 'any'
-    return `\t${a.name}, _ := ctx.Job.Args["${a.name}"].(${goType})`
+    return `\t${a.name}, _ := ctx.Job.Args[${goString(a.name)}].(${goType})`
   }).join('\n')
 
   return `package main
@@ -106,11 +127,11 @@ import (
 
 func main() {
 \tworker := ojs.NewWorker("http://localhost:8080",
-\t\tojs.WithQueues("${job.queue}"),
+\t\tojs.WithQueues(${goString(job.queue)}),
 \t\tojs.WithConcurrency(10),
 \t)
 
-\tworker.Register("${job.type}", func(ctx ojs.JobContext) error {
+\tworker.Register(${goString(job.type)}, func(ctx ojs.JobContext) error {
 ${argExtractions}
 
 \t\tfmt.Printf("Processing ${ctx.jobTypePascal}: %v\\n", ${ctx.argsTyped[0]?.name ?? '"job"'})
@@ -124,7 +145,7 @@ ${argExtractions}
 \tctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 \tdefer cancel()
 
-\tlog.Printf("Starting worker for ${job.type}...")
+\tlog.Printf("Starting worker for %s...", ${goString(job.type)})
 \tif err := worker.Start(ctx); err != nil {
 \t\tfmt.Fprintf(os.Stderr, "Worker error: %v\\n", err)
 \t\tos.Exit(1)
@@ -144,34 +165,39 @@ function generateGoFull(job: OJSJob): string {
 function jsArgsLiteral(args: unknown[]): string {
   if (args.length === 0) return '{}'
   if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
-    return JSON.stringify(args[0], null, 2).replace(/\n/g, '\n  ')
+    return jsLiteral(args[0])
   }
   const entries = args.map((arg, i) => {
     const key = typeof arg === 'string' && i === 0 ? 'to' :
                 typeof arg === 'string' && i === 1 ? 'template' :
                 `arg${i}`
-    const val = typeof arg === 'string' ? `'${arg}'` : JSON.stringify(arg)
-    return `  ${key}: ${val},`
+    return `  ${jsString(key)}: ${jsLiteral(arg)},`
   })
   return `{\n${entries.join('\n')}\n}`
 }
 
 function jsRetryLiteral(retry: Record<string, unknown>): string {
   const parts: string[] = []
-  if (retry.max_attempts !== undefined) parts.push(`    maxAttempts: ${retry.max_attempts},`)
-  if (retry.initial_interval) parts.push(`    initialInterval: '${retry.initial_interval}',`)
-  if (retry.backoff_coefficient !== undefined) parts.push(`    backoffCoefficient: ${retry.backoff_coefficient},`)
-  if (retry.max_interval) parts.push(`    maxInterval: '${retry.max_interval}',`)
-  if (retry.jitter !== undefined) parts.push(`    jitter: ${retry.jitter},`)
+  const maxAttempts = integerLiteral(retry.max_attempts)
+  const backoffCoefficient = numberLiteral(retry.backoff_coefficient)
+  const jitter = booleanLiteral(retry.jitter)
+  if (maxAttempts !== null) parts.push(`    maxAttempts: ${maxAttempts},`)
+  if (typeof retry.initial_interval === 'string') parts.push(`    initialInterval: ${jsString(retry.initial_interval)},`)
+  if (backoffCoefficient !== null) parts.push(`    backoffCoefficient: ${backoffCoefficient},`)
+  if (typeof retry.max_interval === 'string') parts.push(`    maxInterval: ${jsString(retry.max_interval)},`)
+  if (jitter !== null) parts.push(`    jitter: ${jitter},`)
   return `{\n${parts.join('\n')}\n  }`
 }
 
 function generateJsEnqueue(job: OJSJob): string {
   const options: string[] = []
-  if (job.queue !== 'default') options.push(`  queue: '${job.queue}',`)
+  const priority = integerLiteral(job.priority)
+  const timeout = typeof job.timeout === 'number' ? numberLiteral(job.timeout * 1000) : null
+  if (job.queue !== 'default') options.push(`  queue: ${jsString(job.queue)},`)
   if (job.retry) options.push(`  retry: ${jsRetryLiteral(job.retry as Record<string, unknown>)},`)
-  if (job.priority !== undefined && job.priority !== 0) options.push(`  priority: ${job.priority},`)
-  if (typeof job.timeout === 'number' && job.timeout > 0) options.push(`  timeout: ${job.timeout * 1000},`)
+  if (job.meta && Object.keys(job.meta).length > 0) options.push(`  meta: ${jsLiteral(job.meta)},`)
+  if (job.priority !== undefined && job.priority !== 0 && priority !== null) options.push(`  priority: ${priority},`)
+  if (typeof job.timeout === 'number' && job.timeout > 0 && timeout !== null) options.push(`  timeout: ${timeout},`)
 
   const optionsArg = options.length > 0 ? `,\n{\n${options.join('\n')}\n}` : ''
 
@@ -180,7 +206,7 @@ function generateJsEnqueue(job: OJSJob): string {
 const client = new OJSClient({ url: 'http://localhost:8080' });
 
 const job = await client.enqueue(
-  '${job.type}',
+  ${jsString(job.type)},
   ${jsArgsLiteral(job.args)}${optionsArg}
 );
 
@@ -196,11 +222,11 @@ function generateJsWorker(job: OJSJob): string {
 
 const worker = new OJSWorker({
   url: 'http://localhost:8080',
-  queues: ['${job.queue}'],
+  queues: [${jsString(job.queue)}],
   concurrency: 10,
 });
 
-worker.register('${job.type}', async (ctx) => {
+worker.register(${jsString(job.type)}, async (ctx) => {
   const { ${destructure} } = ctx.job.args[0];
 
   console.log(\`Processing ${ctx.jobTypePascal}: \${${ctx.argsTyped[0]?.name ?? '"job"'}}\`);
@@ -231,32 +257,34 @@ function pyArgsLiteral(args: unknown[]): string {
     const key = typeof arg === 'string' && i === 0 ? 'to' :
                 typeof arg === 'string' && i === 1 ? 'template' :
                 `arg${i}`
-    const val = typeof arg === 'string' ? `"${arg}"` :
-                typeof arg === 'boolean' ? (arg ? 'True' : 'False') :
-                typeof arg === 'object' && arg === null ? 'None' :
-                JSON.stringify(arg)
-    return `    "${key}": ${val},`
+    return `    ${pythonString(key)}: ${pythonLiteral(arg)},`
   })
   return `{\n${entries.join('\n')}\n}`
 }
 
 function pyRetryLiteral(retry: Record<string, unknown>): string {
   const parts: string[] = []
-  if (retry.max_attempts !== undefined) parts.push(`    max_attempts=${retry.max_attempts},`)
-  if (retry.initial_interval) parts.push(`    initial_interval="${retry.initial_interval}",`)
-  if (retry.backoff_coefficient !== undefined) parts.push(`    backoff_coefficient=${retry.backoff_coefficient},`)
-  if (retry.max_interval) parts.push(`    max_interval="${retry.max_interval}",`)
-  if (retry.jitter !== undefined) parts.push(`    jitter=${retry.jitter ? 'True' : 'False'},`)
+  const maxAttempts = integerLiteral(retry.max_attempts)
+  const backoffCoefficient = numberLiteral(retry.backoff_coefficient)
+  const jitter = booleanLiteral(retry.jitter)
+  if (maxAttempts !== null) parts.push(`    max_attempts=${maxAttempts},`)
+  if (typeof retry.initial_interval === 'string') parts.push(`    initial_interval=${pythonString(retry.initial_interval)},`)
+  if (backoffCoefficient !== null) parts.push(`    backoff_coefficient=${backoffCoefficient},`)
+  if (typeof retry.max_interval === 'string') parts.push(`    max_interval=${pythonString(retry.max_interval)},`)
+  if (jitter !== null) parts.push(`    jitter=${jitter === 'true' ? 'True' : 'False'},`)
   return `RetryPolicy(\n${parts.join('\n')}\n)`
 }
 
 function generatePythonEnqueue(job: OJSJob): string {
   const ctx = buildContext(job, 'python')
   const options: string[] = []
-  if (job.queue !== 'default') options.push(`    queue="${job.queue}",`)
+  const priority = integerLiteral(job.priority)
+  const timeoutMs = integerLiteral(ctx.timeout * 1000)
+  if (job.queue !== 'default') options.push(`    queue=${pythonString(job.queue)},`)
   if (ctx.hasRetry) options.push(`    retry=${pyRetryLiteral(job.retry as Record<string, unknown>)},`)
-  if (ctx.hasPriority) options.push(`    priority=${job.priority},`)
-  if (ctx.hasTimeout) options.push(`    timeout=${job.timeout},`)
+  if (ctx.hasMeta) options.push(`    meta=${pythonLiteral(job.meta)},`)
+  if (ctx.hasPriority && priority !== null) options.push(`    priority=${priority},`)
+  if (ctx.hasTimeout && timeoutMs !== null) options.push(`    timeout_ms=${timeoutMs},`)
 
   const optionsStr = options.length > 0 ? '\n' + options.join('\n') + '\n' : ''
 
@@ -267,7 +295,7 @@ async def main():
     client = OJSClient(url="http://localhost:8080")
 
     job = await client.enqueue(
-        "${job.type}",
+        ${pythonString(job.type)},
         ${pyArgsLiteral(job.args)},${optionsStr}    )
 
     print(f"Enqueued job: {job.id} (state: {job.state})")
@@ -278,7 +306,7 @@ asyncio.run(main())
 
 function generatePythonWorker(job: OJSJob): string {
   const ctx = buildContext(job, 'python')
-  const argAccess = ctx.argsTyped.map((a) => `    ${a.name} = ctx.job.args[0]["${a.name}"]`).join('\n')
+  const argAccess = ctx.argsTyped.map((a) => `    ${a.name} = ctx.job.args[0][${pythonString(a.name)}]`).join('\n')
 
   return `import asyncio
 import signal
@@ -286,11 +314,11 @@ from openjobspec import OJSWorker
 
 worker = OJSWorker(
     url="http://localhost:8080",
-    queues=["${job.queue}"],
+    queues=[${pythonString(job.queue)}],
     concurrency=10,
 )
 
-@worker.register("${job.type}")
+@worker.register(${pythonString(job.type)})
 async def handle_${ctx.jobTypeSnake}(ctx):
 ${argAccess}
 
@@ -302,7 +330,7 @@ async def main():
     loop = asyncio.get_event_loop()
     loop.add_signal_handler(signal.SIGTERM, lambda: asyncio.create_task(worker.stop()))
 
-    print("Starting worker for ${job.type}...")
+    print("Starting worker for " + ${pythonString(job.type)} + "...")
     await worker.start()
 
 asyncio.run(main())
@@ -323,32 +351,34 @@ function rbArgsLiteral(args: unknown[]): string {
     const key = typeof arg === 'string' && i === 0 ? 'to' :
                 typeof arg === 'string' && i === 1 ? 'template' :
                 `arg${i}`
-    const val = typeof arg === 'string' ? `"${arg}"` :
-                typeof arg === 'boolean' ? (arg ? 'true' : 'false') :
-                typeof arg === 'object' && arg === null ? 'nil' :
-                JSON.stringify(arg)
-    return `    "${key}" => ${val},`
+    return `    ${rubyString(key)} => ${rubyLiteral(arg)},`
   })
   return `{\n${entries.join('\n')}\n  }`
 }
 
 function rbRetryLiteral(retry: Record<string, unknown>): string {
   const parts: string[] = []
-  if (retry.max_attempts !== undefined) parts.push(`    max_attempts: ${retry.max_attempts},`)
-  if (retry.initial_interval) parts.push(`    initial_interval: "${retry.initial_interval}",`)
-  if (retry.backoff_coefficient !== undefined) parts.push(`    backoff_coefficient: ${retry.backoff_coefficient},`)
-  if (retry.max_interval) parts.push(`    max_interval: "${retry.max_interval}",`)
-  if (retry.jitter !== undefined) parts.push(`    jitter: ${retry.jitter},`)
+  const maxAttempts = integerLiteral(retry.max_attempts)
+  const backoffCoefficient = numberLiteral(retry.backoff_coefficient)
+  const jitter = booleanLiteral(retry.jitter)
+  if (maxAttempts !== null) parts.push(`    max_attempts: ${maxAttempts},`)
+  if (typeof retry.initial_interval === 'string') parts.push(`    initial_interval: ${rubyString(retry.initial_interval)},`)
+  if (backoffCoefficient !== null) parts.push(`    backoff_coefficient: ${backoffCoefficient},`)
+  if (typeof retry.max_interval === 'string') parts.push(`    max_interval: ${rubyString(retry.max_interval)},`)
+  if (jitter !== null) parts.push(`    jitter: ${jitter},`)
   return `{\n${parts.join('\n')}\n  }`
 }
 
 function generateRubyEnqueue(job: OJSJob): string {
   const ctx = buildContext(job, 'ruby')
   const options: string[] = []
-  if (job.queue !== 'default') options.push(`  queue: "${job.queue}",`)
+  const priority = integerLiteral(job.priority)
+  const timeout = integerLiteral(ctx.timeout)
+  if (job.queue !== 'default') options.push(`  queue: ${rubyString(job.queue)},`)
   if (ctx.hasRetry) options.push(`  retry: ${rbRetryLiteral(job.retry as Record<string, unknown>)},`)
-  if (ctx.hasPriority) options.push(`  priority: ${job.priority},`)
-  if (ctx.hasTimeout) options.push(`  timeout: ${job.timeout},`)
+  if (ctx.hasMeta) options.push(`  meta: ${rubyLiteral(job.meta)},`)
+  if (ctx.hasPriority && priority !== null) options.push(`  priority: ${priority},`)
+  if (ctx.hasTimeout && timeout !== null) options.push(`  timeout: ${timeout},`)
 
   const optionsStr = options.length > 0 ? '\n' + options.join('\n') + '\n' : ''
 
@@ -357,7 +387,7 @@ function generateRubyEnqueue(job: OJSJob): string {
 client = OJS::Client.new(url: "http://localhost:8080")
 
 job = client.enqueue(
-  "${job.type}",
+  ${rubyString(job.type)},
   ${rbArgsLiteral(job.args)},${optionsStr})
 
 puts "Enqueued job: #{job.id} (state: #{job.state})"
@@ -366,17 +396,17 @@ puts "Enqueued job: #{job.id} (state: #{job.state})"
 
 function generateRubyWorker(job: OJSJob): string {
   const ctx = buildContext(job, 'ruby')
-  const argAccess = ctx.argsTyped.map((a) => `    ${a.name} = ctx.job.args[0]["${a.name}"]`).join('\n')
+  const argAccess = ctx.argsTyped.map((a) => `    ${a.name} = ctx.job.args[0][${rubyString(a.name)}]`).join('\n')
 
   return `require "openjobspec"
 
 worker = OJS::Worker.new(
   url: "http://localhost:8080",
-  queues: ["${job.queue}"],
+  queues: [${rubyString(job.queue)}],
   concurrency: 10
 )
 
-worker.register("${job.type}") do |ctx|
+worker.register(${rubyString(job.type)}) do |ctx|
 ${argAccess}
 
   puts "Processing ${ctx.jobTypePascal}: #{${ctx.argsTyped[0]?.name ?? '"job"'}}"
@@ -386,7 +416,7 @@ end
 
 Signal.trap("TERM") { worker.stop }
 
-puts "Starting worker for ${job.type}..."
+puts "Starting worker for " + ${rubyString(job.type)} + "..."
 worker.start
 `
 }
@@ -405,19 +435,21 @@ function rustArgsLiteral(args: unknown[]): string {
     const key = typeof arg === 'string' && i === 0 ? 'to' :
                 typeof arg === 'string' && i === 1 ? 'template' :
                 `arg${i}`
-    const val = typeof arg === 'string' ? `"${arg}"` : JSON.stringify(arg)
-    return `        "${key}": ${val},`
+    return `        ${rustString(key)}: ${rustLiteral(arg)},`
   })
   return `serde_json::json!({\n${entries.join('\n')}\n    })`
 }
 
 function rustRetryLiteral(retry: Record<string, unknown>): string {
   const parts: string[] = ['        RetryPolicy::builder()']
-  if (retry.max_attempts !== undefined) parts.push(`            .max_attempts(${retry.max_attempts})`)
-  if (retry.initial_interval) parts.push(`            .initial_interval("${retry.initial_interval}".parse().unwrap())`)
-  if (retry.backoff_coefficient !== undefined) parts.push(`            .backoff_coefficient(${retry.backoff_coefficient})`)
-  if (retry.max_interval) parts.push(`            .max_interval("${retry.max_interval}".parse().unwrap())`)
-  if (retry.jitter !== undefined) parts.push(`            .jitter(${retry.jitter})`)
+  const maxAttempts = integerLiteral(retry.max_attempts)
+  const backoffCoefficient = numberLiteral(retry.backoff_coefficient)
+  const jitter = booleanLiteral(retry.jitter)
+  if (maxAttempts !== null) parts.push(`            .max_attempts(${maxAttempts})`)
+  if (typeof retry.initial_interval === 'string') parts.push(`            .initial_interval(${rustString(retry.initial_interval)}.parse().unwrap())`)
+  if (backoffCoefficient !== null) parts.push(`            .backoff_coefficient(${backoffCoefficient})`)
+  if (typeof retry.max_interval === 'string') parts.push(`            .max_interval(${rustString(retry.max_interval)}.parse().unwrap())`)
+  if (jitter !== null) parts.push(`            .jitter(${jitter})`)
   parts.push('            .build()')
   return parts.join('\n')
 }
@@ -425,10 +457,13 @@ function rustRetryLiteral(retry: Record<string, unknown>): string {
 function generateRustEnqueue(job: OJSJob): string {
   const ctx = buildContext(job, 'rust')
   const options: string[] = []
-  if (job.queue !== 'default') options.push(`        .queue("${job.queue}")`)
+  const priority = integerLiteral(job.priority)
+  const timeout = integerLiteral(ctx.timeout)
+  if (job.queue !== 'default') options.push(`        .queue(${rustString(job.queue)})`)
   if (ctx.hasRetry) options.push(`        .retry(\n${rustRetryLiteral(job.retry as Record<string, unknown>)}\n        )`)
-  if (ctx.hasPriority) options.push(`        .priority(${job.priority})`)
-  if (ctx.hasTimeout) options.push(`        .timeout(Duration::from_secs(${job.timeout}))`)
+  if (ctx.hasMeta) options.push(`        .meta(serde_json::from_value(serde_json::json!(${rustLiteral(job.meta)}))?)`)
+  if (ctx.hasPriority && priority !== null) options.push(`        .priority(${priority})`)
+  if (ctx.hasTimeout && timeout !== null) options.push(`        .timeout(Duration::from_secs(${timeout}))`)
 
   const builderChain = options.length > 0 ? '\n' + options.join('\n') + '\n        ' : ''
 
@@ -440,7 +475,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = OJSClient::new("http://localhost:8080")?;
 
     let job = client
-        .enqueue("${job.type}")
+        .enqueue(${rustString(job.type)})
         .args(${rustArgsLiteral(job.args)})${builderChain}.send()
         .await?;
 
@@ -459,13 +494,13 @@ use tokio::signal;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let worker = OJSWorker::builder("http://localhost:8080")
-        .queues(vec!["${job.queue}".into()])
+        .queues(vec![${rustString(job.queue)}.into()])
         .concurrency(10)
         .build()?;
 
-    worker.register("${job.type}", handle_${ctx.jobTypeSnake}).await;
+    worker.register(${rustString(job.type)}, handle_${ctx.jobTypeSnake}).await;
 
-    println!("Starting worker for ${job.type}...");
+    println!("Starting worker for {}...", ${rustString(job.type)});
     tokio::select! {
         result = worker.start() => result?,
         _ = signal::ctrl_c() => {
@@ -495,29 +530,25 @@ function generateRustFull(job: OJSJob): string {
 
 function javaArgsLiteral(args: unknown[]): string {
   if (args.length === 0) return 'Map.of()'
-  const entries = args.map((arg, i) => {
+  const entries = args.flatMap((arg, i) => {
     const key = typeof arg === 'string' && i === 0 ? 'to' :
                 typeof arg === 'string' && i === 1 ? 'template' :
                 `arg${i}`
-    const val = typeof arg === 'string' ? `"${arg}"` :
-                typeof arg === 'boolean' ? String(arg) :
-                typeof arg === 'number' ? String(arg) :
-                `"${JSON.stringify(arg)}"`
-    return `            "${key}", ${val}`
+    return [javaString(key), javaLiteral(arg)]
   })
-  if (entries.length <= 5) {
-    return `Map.of(\n${entries.join(',\n')}\n        )`
-  }
-  return `Map.of(\n${entries.join(',\n')}\n        )`
+  return `mapOf(\n            ${entries.join(',\n            ')}\n        )`
 }
 
 function javaRetryLiteral(retry: Record<string, unknown>): string {
   const parts: string[] = ['        RetryPolicy.builder()']
-  if (retry.max_attempts !== undefined) parts.push(`            .maxAttempts(${retry.max_attempts})`)
-  if (retry.initial_interval) parts.push(`            .initialInterval(Duration.parse("${retry.initial_interval}"))`)
-  if (retry.backoff_coefficient !== undefined) parts.push(`            .backoffCoefficient(${retry.backoff_coefficient})`)
-  if (retry.max_interval) parts.push(`            .maxInterval(Duration.parse("${retry.max_interval}"))`)
-  if (retry.jitter !== undefined) parts.push(`            .jitter(${retry.jitter})`)
+  const maxAttempts = integerLiteral(retry.max_attempts)
+  const backoffCoefficient = numberLiteral(retry.backoff_coefficient)
+  const jitter = booleanLiteral(retry.jitter)
+  if (maxAttempts !== null) parts.push(`            .maxAttempts(${maxAttempts})`)
+  if (typeof retry.initial_interval === 'string') parts.push(`            .initialInterval(Duration.parse(${javaString(retry.initial_interval)}))`)
+  if (backoffCoefficient !== null) parts.push(`            .backoffCoefficient(${backoffCoefficient})`)
+  if (typeof retry.max_interval === 'string') parts.push(`            .maxInterval(Duration.parse(${javaString(retry.max_interval)}))`)
+  if (jitter !== null) parts.push(`            .jitter(${jitter})`)
   parts.push('            .build()')
   return parts.join('\n')
 }
@@ -525,25 +556,44 @@ function javaRetryLiteral(retry: Record<string, unknown>): string {
 function generateJavaEnqueue(job: OJSJob): string {
   const ctx = buildContext(job, 'java')
   const options: string[] = []
-  if (job.queue !== 'default') options.push(`            .queue("${job.queue}")`)
+  const priority = integerLiteral(job.priority)
+  const timeout = integerLiteral(ctx.timeout)
+  if (job.queue !== 'default') options.push(`            .queue(${javaString(job.queue)})`)
   if (ctx.hasRetry) options.push(`            .retry(\n${javaRetryLiteral(job.retry as Record<string, unknown>)}\n            )`)
-  if (ctx.hasPriority) options.push(`            .priority(${job.priority})`)
-  if (ctx.hasTimeout) options.push(`            .timeout(Duration.ofSeconds(${job.timeout}))`)
+  if (ctx.hasMeta) options.push(`            .meta(${javaLiteral(job.meta)})`)
+  if (ctx.hasPriority && priority !== null) options.push(`            .priority(${priority})`)
+  if (ctx.hasTimeout && timeout !== null) options.push(`            .timeout(Duration.ofSeconds(${timeout}))`)
 
   const builderChain = options.length > 0 ? '\n' + options.join('\n') + '\n            ' : ''
 
   return `import org.openjobspec.sdk.OJSClient;
 ${ctx.hasRetry ? 'import org.openjobspec.sdk.RetryPolicy;\n' : ''}import java.time.Duration;
-import java.util.Map;
+  import java.util.ArrayList;
+  import java.util.Arrays;
+  import java.util.LinkedHashMap;
+  import java.util.List;
+  import java.util.Map;
 
-public class Enqueue${ctx.jobTypePascal} {
+  public class Enqueue${ctx.jobTypePascal} {
     public static void main(String[] args) throws Exception {
         var client = OJSClient.create("http://localhost:8080");
 
-        var job = client.enqueue("${job.type}")
+        var job = client.enqueue(${javaString(job.type)})
             .args(${javaArgsLiteral(job.args)})${builderChain}.send();
 
         System.out.printf("Enqueued job: %s (state: %s)%n", job.id(), job.state());
+    }
+
+    private static Map<String, Object> mapOf(Object... entries) {
+        var result = new LinkedHashMap<String, Object>();
+        for (var i = 0; i < entries.length; i += 2) {
+            result.put((String) entries[i], entries[i + 1]);
+        }
+        return result;
+    }
+
+    private static List<Object> listOf(Object... values) {
+        return new ArrayList<>(Arrays.asList(values));
     }
 }
 `
@@ -559,13 +609,13 @@ import java.util.Map;
 public class ${ctx.jobTypePascal}Worker {
     public static void main(String[] args) throws Exception {
         var worker = OJSWorker.builder("http://localhost:8080")
-            .queues("${job.queue}")
+            .queues(${javaString(job.queue)})
             .concurrency(10)
             .build();
 
-        worker.register("${job.type}", ${ctx.jobTypePascal}Worker::handle);
+        worker.register(${javaString(job.type)}, ${ctx.jobTypePascal}Worker::handle);
 
-        System.out.println("Starting worker for ${job.type}...");
+        System.out.println("Starting worker for " + ${javaString(job.type)} + "...");
         Runtime.getRuntime().addShutdownHook(new Thread(worker::stop));
         worker.start();
     }
