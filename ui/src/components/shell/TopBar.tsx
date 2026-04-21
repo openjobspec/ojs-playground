@@ -11,6 +11,7 @@ export function TopBar() {
   const { copyShareUrl } = useShare()
   const setCommandPaletteOpen = useStore((s) => s.setCommandPaletteOpen)
   const setShowOnboarding = useStore((s) => s.setShowOnboarding)
+  const isLocalMode = useStore((s) => s.isLocalMode)
 
   const handleShare = async () => {
     try {
@@ -48,9 +49,11 @@ export function TopBar() {
         <Badge
           variant="secondary"
           className="h-5 text-[10px] font-normal cursor-default"
-          title="Simulations run client-side in your browser — no backend server required"
+          title={isLocalMode
+            ? 'Connected to the local OJS Playground server'
+            : 'Simulations run client-side in your browser — no backend server required'}
         >
-          Browser Mode
+          {isLocalMode ? 'Local Mode' : 'Browser Mode'}
         </Badge>
         <div className="hidden sm:flex items-center gap-1 ml-1">
           <a
@@ -80,36 +83,40 @@ export function TopBar() {
           size="icon-sm"
           className="text-muted-foreground hover:text-foreground"
           onClick={() => setCommandPaletteOpen(true)}
+          aria-label="Open command palette"
           title="Command palette (⌘K)"
         >
-          <Command className="h-4 w-4" />
+          <Command className="h-4 w-4" aria-hidden="true" />
         </Button>
         <Button
           variant="ghost"
           size="icon-sm"
           className="text-muted-foreground hover:text-foreground"
           onClick={handleShare}
+          aria-label="Copy share URL"
           title="Copy share URL"
         >
-          <Share2 className="h-4 w-4" />
+          <Share2 className="h-4 w-4" aria-hidden="true" />
         </Button>
         <Button
           variant="ghost"
           size="icon-sm"
           className="text-muted-foreground hover:text-foreground"
           onClick={toggleTheme}
+          aria-label={`Change theme. Current theme: ${theme}`}
           title={`Theme: ${theme}`}
         >
-          <ThemeIcon className="h-4 w-4" />
+          <ThemeIcon className="h-4 w-4" aria-hidden="true" />
         </Button>
         <Button
           variant="ghost"
           size="icon-sm"
           className="text-muted-foreground hover:text-foreground"
           onClick={handleHelp}
+          aria-label="Open help and keyboard shortcuts"
           title="Help & shortcuts"
         >
-          <HelpCircle className="h-4 w-4" />
+          <HelpCircle className="h-4 w-4" aria-hidden="true" />
         </Button>
       </div>
     </div>

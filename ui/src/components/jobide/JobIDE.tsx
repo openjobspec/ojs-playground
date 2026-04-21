@@ -89,8 +89,22 @@ export function JobIDE() {
   const [serverUrl, setServerUrl] = useState('http://localhost:8080')
   const [selectedTemplate, setSelectedTemplate] = useState('Simple Job')
   const logsEndRef = useRef<HTMLDivElement>(null)
+  const mountedRef = useRef(true)
+  const transitionTimersRef = useRef(new Set<ReturnType<typeof setTimeout>>())
+  const enqueueControllerRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      enqueueControllerRef.current?.abort()
+      for (const timer of transitionTimersRef.current) clearTimeout(timer)
+      transitionTimersRef.current.clear()
+    }
+  }, [])
 
   const addLog = useCallback((level: LogEntry['level'], message: string) => {
+    if (!mountedRef.current) return
     setLogs((prev) => [
       ...prev,
       { timestamp: new Date().toISOString().slice(11, 23), level, message },
@@ -107,7 +121,9 @@ export function JobIDE() {
       const delays = [0, 500, 1000, 2500]
 
       states.forEach((state, i) => {
-        setTimeout(() => {
+        const timer = setTimeout(() => {
+          transitionTimersRef.current.delete(timer)
+          if (!mountedRef.current) return
           setJobs((prev) =>
             prev.map((j) =>
               j.id === jobId ? { ...j, state, timestamp: new Date().toISOString() } : j,
@@ -118,12 +134,16 @@ export function JobIDE() {
             `Job ${jobId.slice(0, 12)}... → ${state}`,
           )
         }, delays[i])
+        transitionTimersRef.current.add(timer)
       })
     },
     [addLog],
   )
 
   const handleEnqueue = useCallback(async () => {
+    enqueueControllerRef.current?.abort()
+    const controller = new AbortController()
+    enqueueControllerRef.current = controller
     setIsEnqueuing(true)
     addLog('info', 'Enqueuing job...')
 
@@ -132,7 +152,8 @@ export function JobIDE() {
       parsed = JSON.parse(jobDefinition) as Record<string, unknown>
     } catch {
       addLog('error', 'Invalid JSON — check your job definition')
-      setIsEnqueuing(false)
+      if (enqueueControllerRef.current === controller) enqueueControllerRef.current = null
+      if (mountedRef.current) setIsEnqueuing(false)
       return
     }
 
@@ -141,10 +162,13 @@ export function JobIDE() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: jobDefinition,
+        signal: controller.signal,
       })
+      if (controller.signal.aborted || !mountedRef.current) return
 
       if (response.ok) {
         const data = (await response.json()) as Record<string, unknown>
+        if (controller.signal.aborted || !mountedRef.current) return
         const jobId = (data.id as string) || `sim-${Date.now().toString(36)}`
         const jobType = (parsed.type as string) || 'unknown'
 
@@ -162,6 +186,7 @@ export function JobIDE() {
         throw new Error(`Server returned ${String(response.status)}`)
       }
     } catch {
+      if (controller.signal.aborted || !mountedRef.current) return
       // Simulate in browser mode if server not available
       const jobId = `sim-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
       const jobType = (parsed.type as string) || (parsed.workflow as string) || 'batch'
@@ -177,9 +202,10 @@ export function JobIDE() {
       }
       setJobs((prev) => [newJob, ...prev].slice(0, 50))
       simulateStateTransitions(jobId)
+    } finally {
+      if (enqueueControllerRef.current === controller) enqueueControllerRef.current = null
+      if (mountedRef.current) setIsEnqueuing(false)
     }
-
-    setIsEnqueuing(false)
   }, [jobDefinition, serverUrl, addLog, simulateStateTransitions])
 
   const handleTemplateChange = (template: string) => {
@@ -197,6 +223,7 @@ export function JobIDE() {
           <div className="mb-2 flex items-center justify-between">
             <span className="text-xs font-semibold text-foreground">Job Definition</span>
             <select
+              aria-label="Job template"
               value={selectedTemplate}
               onChange={(e) => handleTemplateChange(e.target.value)}
               className="rounded border bg-muted px-2 py-1 text-[11px] text-foreground"
@@ -209,6 +236,8 @@ export function JobIDE() {
             </select>
           </div>
           <textarea
+            aria-label="Job definition"
+            name="job-definition"
             value={jobDefinition}
             onChange={(e) => setJobDefinition(e.target.value)}
             className="flex-1 resize-none rounded border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
@@ -225,12 +254,16 @@ export function JobIDE() {
                   : 'bg-primary text-primary-foreground hover:bg-primary/90',
               )}
             >
-              {isEnqueuing ? 'Enqueuing...' : '▶ Enqueue'}
+              {isEnqueuing ? 'Enqueuing…' : 'Enqueue'}
             </button>
             <input
+              aria-label="OJS server URL"
+              name="server-url"
+              type="url"
+              autoComplete="off"
               value={serverUrl}
               onChange={(e) => setServerUrl(e.target.value)}
-              placeholder="Server URL"
+              placeholder="Server URL…"
               className="flex-1 rounded border bg-muted px-2 py-1.5 font-mono text-[11px] text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>

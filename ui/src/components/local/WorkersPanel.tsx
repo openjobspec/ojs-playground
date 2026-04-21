@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useRef } from 'react'
 import { useStore } from '@/store'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,10 +11,11 @@ export function WorkersPanel() {
   const localUrl = useStore((s) => s.localUrl)
   const workers = useStore((s) => s.workers)
   const setWorkers = useStore((s) => s.setWorkers)
+  const generationRef = useRef(0)
 
-  const fetchWorkers = useCallback(async () => {
+  const fetchWorkers = useCallback(async (signal?: AbortSignal, generation = generationRef.current) => {
     try {
-      const res = await fetch(`${localUrl}/api/workers`)
+      const res = await fetch(`${localUrl}/api/workers`, { signal })
       if (!res.ok) return
       const data = await res.json()
       const mapped: LocalWorker[] = (data.workers ?? []).map((w: Record<string, unknown>) => ({
@@ -25,7 +26,7 @@ export function WorkersPanel() {
         status: w.status === 'disconnected' ? 'disconnected' : 'connected',
         lastSeen: Date.now(),
       }))
-      setWorkers(mapped)
+      if (!signal?.aborted && generation === generationRef.current) setWorkers(mapped)
     } catch {
       // server not reachable
     }
@@ -33,9 +34,16 @@ export function WorkersPanel() {
 
   useEffect(() => {
     if (!isLocalMode) return
-    fetchWorkers()
-    const interval = setInterval(fetchWorkers, 5000)
-    return () => clearInterval(interval)
+    const generation = ++generationRef.current
+    const controller = new AbortController()
+    const refresh = () => fetchWorkers(controller.signal, generation)
+    refresh()
+    const interval = setInterval(refresh, 5000)
+    return () => {
+      generationRef.current++
+      controller.abort()
+      clearInterval(interval)
+    }
   }, [isLocalMode, fetchWorkers])
 
   if (!isLocalMode) {
@@ -50,26 +58,28 @@ export function WorkersPanel() {
   }
 
   const handleRemove = async (id: string) => {
+    const generation = generationRef.current
     try {
       const res = await fetch(`${localUrl}/api/workers/${id}`, { method: 'DELETE' })
-      if (res.ok) {
+      if (res.ok && generation === generationRef.current) {
         setWorkers(workers.filter((w) => w.id !== id))
         toast.success('Worker removed')
       }
     } catch {
-      toast.error('Failed to remove worker')
+      if (generation === generationRef.current) toast.error('Failed to remove worker')
     }
   }
 
   const handleDrain = async (id: string) => {
+    const generation = generationRef.current
     try {
       const res = await fetch(`${localUrl}/api/workers/${id}/drain`, { method: 'POST' })
-      if (res.ok) {
+      if (res.ok && generation === generationRef.current) {
         setWorkers(workers.map((w) => w.id === id ? { ...w, status: 'disconnected' as const } : w))
         toast.success('Worker draining')
       }
     } catch {
-      toast.error('Failed to drain worker')
+      if (generation === generationRef.current) toast.error('Failed to drain worker')
     }
   }
 
@@ -85,7 +95,8 @@ export function WorkersPanel() {
             variant="ghost"
             size="icon"
             className="h-6 w-6"
-            onClick={fetchWorkers}
+            onClick={() => fetchWorkers()}
+            aria-label="Refresh workers"
             title="Refresh workers"
           >
             <RefreshCw className="h-3 w-3" />
@@ -159,6 +170,7 @@ function WorkerCard({
             size="icon"
             className="h-6 w-6"
             onClick={() => onDrain(worker.id)}
+            aria-label={`Drain ${worker.name}`}
             title="Drain worker (stop accepting new jobs)"
           >
             <PauseCircle className="h-3 w-3" />
@@ -169,6 +181,7 @@ function WorkerCard({
           size="icon"
           className="h-6 w-6"
           onClick={() => onRemove(worker.id)}
+          aria-label={`Remove ${worker.name}`}
           title="Remove worker"
         >
           <Trash2 className="h-3 w-3" />

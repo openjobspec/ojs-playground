@@ -48,6 +48,11 @@ export const createLocalSlice: StateCreator<LocalSlice, [], [], LocalSlice> = (s
   setActiveBackend: (backend) => set({ activeBackend: backend }),
   setWorkers: (workers) => set({ workers }),
   addRecentJob: (job) =>
-    set({ recentJobs: [job, ...get().recentJobs].slice(0, 100) }),
+    set({
+      recentJobs: [
+        job,
+        ...get().recentJobs.filter((existing) => existing.id !== job.id),
+      ].slice(0, 100),
+    }),
   setSseConnected: (connected) => set({ sseConnected: connected }),
 })
