@@ -1,8 +1,8 @@
 .PHONY: dev build build-all docker test lint clean copy-ui
 
-VERSION ?= 0.2.0
+VERSION ?= $(shell node -p "require('../npm/package.json').version")
 BINARY  := bin/ojs-playground
-GOFLAGS := -ldflags="-s -w -X main.version=$(VERSION)"
+GOFLAGS := -ldflags="-s -w -X main.version=$(VERSION) -X github.com/openjobspec/ojs-playground/server/internal/api.version=$(VERSION)"
 
 # Development: build UI and run server
 dev: copy-ui

@@ -1,4 +1,4 @@
-.PHONY: all build-ui build-server build test lint dev clean
+.PHONY: all build-ui sync-embedded-ui release-embedded-ui build-server build test lint dev clean
 
 all: build
 
@@ -6,6 +6,14 @@ all: build
 
 build-ui:
 	cd ui && npm run build
+
+sync-embedded-ui: build-ui
+	node scripts/sync-embedded-ui.mjs
+
+release-embedded-ui:
+	cd ui && npm ci
+	cd ui && npm run notices
+	$(MAKE) sync-embedded-ui
 
 test-ui:
 	cd ui && npm test
@@ -18,7 +26,7 @@ dev-ui:
 
 # ---- Server ----
 
-build-server: build-ui
+build-server: sync-embedded-ui
 	cd server && make build
 
 test-server:

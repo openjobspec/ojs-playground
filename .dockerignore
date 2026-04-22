@@ -1,0 +1,9 @@
+.git
+.github
+ui/node_modules
+ui/dist
+ui/coverage
+server/bin
+server/internal/embed/dist
+dogfood-output
+*.log
