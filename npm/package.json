@@ -1,6 +1,6 @@
 {
   "name": "@openjobspec/playground",
-  "version": "0.2.0",
+  "version": "0.5.0",
   "description": "OJS Playground — interactive Open Job Spec environment",
   "license": "Apache-2.0",
   "repository": {
@@ -20,7 +20,16 @@
   "engines": {
     "node": ">=18"
   },
+  "scripts": {
+    "check:package": "node scripts/check-package.cjs",
+    "verify:release-assets": "node ../scripts/verify-release-assets.mjs",
+    "test": "node --test test/*.test.cjs"
+  },
   "files": [
-    "bin/"
-  ]
+    "bin/",
+    "lib/"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }
