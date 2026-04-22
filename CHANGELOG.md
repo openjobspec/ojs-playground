@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-02
+
+### Added
+
+- Release automation that cross-compiles, verifies, checksums, and attaches all
+  four supported launcher binaries before publishing the npm launcher.
+- Generated third-party notices containing the actual installed production
+  dependency license and notice texts, included in embedded and Docker assets.
+
+### Changed
+
+- The Go binary version is injected from `npm/package.json` instead of a
+  hard-coded constant.
+- The npm launcher verifies `checksums.txt`, downloads through a temporary
+  file, atomically installs only checksum-valid binaries, and repairs corrupt
+  cached binaries without leaving partial files.
+
+## [0.4.1] - 2026-04-21
+
+### Changed
+
+- Strengthened SQLite invalid-path test coverage.
+
 ## [0.4.0] - 2026-04-20
 
 ### Added
