@@ -14,7 +14,7 @@ Thank you for your interest in contributing to the OJS Playground! This guide co
 
 ```bash
 cd ui
-npm install
+npm ci
 npm run dev          # http://localhost:5173
 ```
 
@@ -25,6 +25,15 @@ cd server
 make build
 make run             # http://localhost:4200
 ```
+
+### Release automation
+
+Release Please reads `release-please-config.json` and
+`.release-please-manifest.json`. The manifest records the last published
+version; never persist `release-as`. Configure `RELEASE_PLEASE_TOKEN` as a
+GitHub App token or fine-grained PAT able to create releases and trigger tag
+workflows. This is required so the generated tag starts the four-binary release
+workflow before npm publication.
 
 ## Project Structure
 
