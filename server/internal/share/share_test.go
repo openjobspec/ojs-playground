@@ -2,6 +2,10 @@ package share
 
 import (
 	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -140,5 +144,26 @@ func TestDecodeInvalidJSON(t *testing.T) {
 	_, err := DecodeStateFromURL("bm90LWpzb24")
 	if err == nil {
 		t.Error("expected error for invalid JSON")
+	}
+}
+
+func TestHandleShareCreateRejectsUnknownAndChunkedOversizedBodies(t *testing.T) {
+	handler := HandleShareCreate(NewLinkStore(time.Hour))
+
+	unknown := httptest.NewRequest(http.MethodPost, "/share", strings.NewReader(`{"version":"1.0","unknown":true}`))
+	unknownRecorder := httptest.NewRecorder()
+	handler(unknownRecorder, unknown)
+	if unknownRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected unknown field to return 400, got %d", unknownRecorder.Code)
+	}
+
+	body := `{"code":"` + strings.Repeat("x", 1<<20) + `"}`
+	oversized := httptest.NewRequest(http.MethodPost, "/share", io.NopCloser(strings.NewReader(body)))
+	oversized.ContentLength = -1
+	oversized.TransferEncoding = []string{"chunked"}
+	oversizedRecorder := httptest.NewRecorder()
+	handler(oversizedRecorder, oversized)
+	if oversizedRecorder.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected chunked oversized body to return 413, got %d", oversizedRecorder.Code)
 	}
 }
