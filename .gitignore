@@ -5,6 +5,9 @@ node_modules/
 ui/dist/
 server/bin/
 npm/dist/
+release-assets/
+!server/internal/embed/dist/
+!server/internal/embed/dist/**
 
 # Environment
 .env
