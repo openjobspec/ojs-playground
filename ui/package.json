@@ -14,7 +14,7 @@
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
     "@xyflow/react": "^12.4.4",
-    "ajv": "^8.17.1",
+    "ajv": "^8.18.0",
     "ajv-formats": "^3.0.1",
     "allotment": "^1.0.9",
     "clsx": "^2.1.1",
