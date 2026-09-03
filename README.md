@@ -1,5 +1,5 @@
 # OJS Playground
-[![Stability: beta](https://img.shields.io/badge/stability-beta-yellow.svg)](https://github.com/openjobspec/openjobspec/blob/main/STABILITY.md)
+[![Stability: beta](https://img.shields.io/badge/stability-beta-yellow.svg)](https://openjobspec.org/governance/stability/)
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
@@ -13,8 +13,11 @@ Visit [play.openjobspec.org](https://play.openjobspec.org) — no installation r
 
 ### Local Mode
 
+Build and run from source:
+
 ```bash
-npx ojs-playground dev
+make build
+./server/bin/ojs-playground dev
 ```
 
 Or with Docker:
@@ -32,7 +35,7 @@ Then open [http://localhost:4200](http://localhost:4200).
 
 ```bash
 cd ui
-npm install
+npm ci
 npm run dev          # Start dev server
 npm run build        # Production build
 npm test             # Run tests
@@ -53,9 +56,36 @@ make test            # Run tests
 The playground operates in two modes:
 
 - **Browser Mode**: Zero-install SPA with client-side simulation, schema-driven editing (Monaco), state machine visualization (React Flow), retry timeline (Recharts), and multi-language code generation.
-- **Local Mode**: Go binary (or Docker) that executes real jobs against backends (Redis, Postgres, etc.) with SSE-streamed real-time updates, worker auto-discovery, chaos engineering controls, and conformance testing.
+- **Local Mode**: Go binary (or Docker) with an embedded in-memory OJS backend,
+  SSE-streamed real-time updates, worker auto-discovery, chaos engineering
+  controls, and conformance testing against configured HTTP targets.
 
 Both modes share the same React frontend. In Local Mode, the UI is embedded via `go:embed`.
+
+### Reproducible embedded frontend
+
+The checked-in files under `server/internal/embed/dist/` are built from the
+locked UI dependency graph. Regenerate them without dependency drift:
+
+```bash
+make release-embedded-ui
+git diff -- server/internal/embed/dist THIRD_PARTY_NOTICES.md
+```
+
+This runs `npm ci` from `ui/package-lock.json`, verifies the generated
+third-party notices, builds both the SPA and web component, and replaces the
+embedded asset directory. Release artifacts that contain the embedded frontend
+must ship `LICENSE` and `THIRD_PARTY_NOTICES.md`; the Docker image includes both
+under `/licenses`.
+
+### Release ordering
+
+Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`. The workflow
+validates the tag against `npm/package.json`, rebuilds the embedded frontend,
+cross-compiles all four supported binaries, verifies their checksums and legal
+files locally, attaches the complete set to the GitHub release, and only then
+publishes `@openjobspec/playground`. The npm launcher always constructs its
+download URL from its own package version.
 
 ## Project Structure
 
@@ -108,7 +138,27 @@ Drop an OJS playground into any documentation site with a single script tag:
 
 Configurable theme, size, and server URL. See [`embed/README.md`](embed/README.md) for details.
 
+### Web Component
+
+The production UI build produces `ui/dist/ojs-playground.js`. Serve that file
+from the same origin as the rest of the playground deployment:
+
+```html
+<script type="module" src="/ojs-playground.js"></script>
+<ojs-playground
+  theme="dark"
+  language="go"
+  height="500px"
+  spec='{"specversion":"1.0","id":"019461a8-1a2b-7c3d-8e4f-5a6b7c8d9e0f","type":"email.send","queue":"default","args":[]}'>
+</ojs-playground>
+```
+
+Supported attributes are `theme` (`light`, `dark`, `system`), `language`, `spec`
+(up to 64 KiB), `height` (a positive simple CSS length), and boolean `readonly`.
+The element emits `ojs-spec-change` and `ojs-code-copy` custom events.
+
 ## License
 
 Apache License 2.0 — see [LICENSE](LICENSE).
-
+Third-party software bundled into the embedded frontend is listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

@@ -12,7 +12,7 @@ import { Copy, Download, Code2, FolderDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { trackEvent } from '@/engine/analytics'
 import { getEmbedSnippet } from '@/components/embed/EmbedLayout'
-import { downloadProjectAsScript } from '@/engine/project'
+import { downloadProjectArchive } from '@/engine/project'
 
 const fileExtensions: Record<string, string> = {
   go: 'go',
@@ -37,6 +37,7 @@ export function CodeActions() {
   const language = useStore((s) => s.language)
   const editorContent = useStore((s) => s.editorContent)
   const parsedJob = useStore((s) => s.parsedJob)
+  const isValid = useStore((s) => s.validationResult.valid)
   const [embedOpen, setEmbedOpen] = useState(false)
 
   const handleCopy = async () => {
@@ -106,13 +107,15 @@ export function CodeActions() {
         variant="outline"
         className="h-7 w-full gap-1 text-xs"
         onClick={() => {
-          if (parsedJob) {
-            downloadProjectAsScript(parsedJob, language)
+          if (parsedJob && isValid) {
+            downloadProjectArchive(parsedJob, language)
             trackEvent('code_downloaded', { language, project: true })
             toast.success('Starter project downloaded')
+          } else {
+            toast.error('Fix validation errors before downloading a project')
           }
         }}
-        disabled={!parsedJob}
+        disabled={!parsedJob || !isValid}
       >
         <FolderDown className="h-3 w-3" />
         Download Project

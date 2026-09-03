@@ -8,6 +8,8 @@ import (
 	"time"
 
 	_ "modernc.org/sqlite"
+
+	"github.com/openjobspec/ojs-playground/server/internal/httpjson"
 )
 
 // SQLiteStore implements Store using SQLite.
@@ -23,7 +25,7 @@ func NewSQLiteStore(ctx context.Context, dbPath string) (*SQLiteStore, error) {
 	}
 
 	// Connection pool settings for WAL mode
-	db.SetMaxOpenConns(1)  // Single writer
+	db.SetMaxOpenConns(1) // Single writer
 	db.SetMaxIdleConns(2)
 	db.SetConnMaxLifetime(0)
 
@@ -141,6 +143,12 @@ func (s *SQLiteStore) ListJobs(ctx context.Context, filter ListFilter) ([]*Job, 
 	if limit <= 0 {
 		limit = 50
 	}
+	if limit > httpjson.MaxListLimit {
+		limit = httpjson.MaxListLimit
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
 	query := fmt.Sprintf("SELECT id, type, state, queue, args, meta, priority, attempt, max_attempts, created_at, updated_at, backend, result, error FROM playground_jobs WHERE %s ORDER BY created_at DESC LIMIT ? OFFSET ?", where)
 	args = append(args, limit, filter.Offset)
 
@@ -152,7 +160,7 @@ func (s *SQLiteStore) ListJobs(ctx context.Context, filter ListFilter) ([]*Job, 
 
 	var jobs []*Job
 	for rows.Next() {
-		job, err := scanJobRows(rows)
+		job, err := scanJob(rows)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -190,43 +198,18 @@ func (s *SQLiteStore) Close() error {
 	return s.db.Close()
 }
 
-// scanner interface to share between QueryRow and Rows.Scan
+// scanner is satisfied by both *sql.Row and *sql.Rows, letting a single
+// scanJob implementation serve GetJob (QueryRow) and ListJobs (Query).
 type scanner interface {
 	Scan(dest ...any) error
 }
 
-func scanJob(row *sql.Row) (*Job, error) {
+func scanJob(row scanner) (*Job, error) {
 	var job Job
 	var args, meta, createdAt, updatedAt string
 	var result, errStr *string
 
 	err := row.Scan(&job.ID, &job.Type, &job.State, &job.Queue, &args, &meta,
-		&job.Priority, &job.Attempt, &job.MaxAttempts,
-		&createdAt, &updatedAt, &job.Backend, &result, &errStr)
-	if err != nil {
-		return nil, err
-	}
-
-	job.Args = json.RawMessage(args)
-	job.Meta = json.RawMessage(meta)
-	job.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
-	job.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
-	if result != nil {
-		job.Result = json.RawMessage(*result)
-	}
-	if errStr != nil {
-		job.Error = json.RawMessage(*errStr)
-	}
-
-	return &job, nil
-}
-
-func scanJobRows(rows *sql.Rows) (*Job, error) {
-	var job Job
-	var args, meta, createdAt, updatedAt string
-	var result, errStr *string
-
-	err := rows.Scan(&job.ID, &job.Type, &job.State, &job.Queue, &args, &meta,
 		&job.Priority, &job.Attempt, &job.MaxAttempts,
 		&createdAt, &updatedAt, &job.Backend, &result, &errStr)
 	if err != nil {

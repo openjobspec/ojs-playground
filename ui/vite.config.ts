@@ -12,10 +12,10 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
         manualChunks: {
-          'react-vendor': ['react', 'react-dom'],
           'recharts': ['recharts'],
           'xyflow': ['@xyflow/react'],
         },

@@ -52,7 +52,7 @@ func (h *BackendHandler) Pause(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusNotFound, "Backend not found: "+name)
 		return
 	}
-	WriteJSON(w, http.StatusOK, map[string]any{"status": "paused", "backend": name})
+	WriteError(w, http.StatusNotImplemented, "Backend pause is not supported by this playground adapter.")
 }
 
 // Resume handles POST /api/backends/{name}/resume.
@@ -62,5 +62,5 @@ func (h *BackendHandler) Resume(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusNotFound, "Backend not found: "+name)
 		return
 	}
-	WriteJSON(w, http.StatusOK, map[string]any{"status": "active", "backend": name})
+	WriteError(w, http.StatusNotImplemented, "Backend resume is not supported by this playground adapter.")
 }

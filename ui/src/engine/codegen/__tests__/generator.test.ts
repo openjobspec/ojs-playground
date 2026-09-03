@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { spawnSync } from 'node:child_process'
 import { generateCode } from '../generator'
 import type { OJSJob } from '../../types'
 import { DEFAULT_JOB } from '../../constants'
@@ -51,14 +54,14 @@ describe('generateCode', () => {
       const code = generateCode(DEFAULT_JOB, 'javascript', 'enqueue')
       expect(code).toContain('OJSClient')
       expect(code).toContain('client.enqueue')
-      expect(code).toContain("'email.send'")
+      expect(code).toContain('"email.send"')
     })
 
     it('generates worker code', () => {
       const code = generateCode(DEFAULT_JOB, 'javascript', 'worker')
       expect(code).toContain('OJSWorker')
       expect(code).toContain('worker.register')
-      expect(code).toContain("'email.send'")
+      expect(code).toContain('"email.send"')
     })
 
     it('generates full code', () => {
@@ -233,5 +236,159 @@ describe('generateCode', () => {
         }
       }
     })
+
+    it('encodes adversarial values as data and produces parseable source', () => {
+      const attack = [
+        'quote" and apostrophe\'',
+        'backslash\\ template ${process.exit(1)}',
+        'ruby #{system("id")} comment // /*',
+        'INJECTED();',
+      ].join('\n')
+      const job = {
+        ...DEFAULT_JOB,
+        type: attack,
+        queue: attack,
+        args: [attack, { [attack]: attack, nested: [attack, null, true] }],
+        meta: { [attack]: attack },
+        retry: {
+          ...DEFAULT_JOB.retry,
+          initial_interval: attack,
+          max_interval: attack,
+        },
+      } as OJSJob
+
+      const languages = ['go', 'javascript', 'python', 'ruby', 'rust', 'java'] as const
+      for (const language of languages) {
+        for (const scope of ['enqueue', 'worker'] as const) {
+          const code = generateCode(job, language, scope)
+          expect(code.split('\n')).not.toContain('INJECTED();')
+          expect(code).not.toContain('\n/* INJECTED')
+          assertParses(language, code)
+        }
+      }
+    }, 20_000)
   })
 })
+
+function runParser(command: string, args: string[], input: string): void {
+  const result = spawnSync(command, args, {
+    input,
+    encoding: 'utf8',
+    maxBuffer: 4 * 1024 * 1024,
+  })
+  if (result.error && 'code' in result.error && result.error.code === 'ENOENT') return
+  expect(result.status, `${command} parser failed:\n${result.stderr || result.stdout}`).toBe(0)
+}
+
+function assertParses(language: 'go' | 'javascript' | 'python' | 'ruby' | 'rust' | 'java', code: string): void {
+  switch (language) {
+    case 'go':
+      runParser('gofmt', [], code)
+      return
+    case 'javascript':
+      runParser('node', ['--input-type=module', '--check'], code)
+      return
+    case 'python':
+      runParser('python3', ['-c', 'import ast,sys; ast.parse(sys.stdin.read())'], code)
+      return
+    case 'ruby':
+      runParser('ruby', ['-c'], code)
+      return
+    case 'rust':
+      runParser('rustfmt', ['--edition', '2021', '--emit', 'stdout'], code)
+      return
+    case 'java':
+      assertJavaCompiles(code)
+  }
+}
+
+function assertJavaCompiles(code: string): void {
+  const probe = spawnSync('javac', ['-version'], { encoding: 'utf8' })
+  if (probe.error && 'code' in probe.error && probe.error.code === 'ENOENT') return
+
+  const className = /public class ([A-Za-z_][A-Za-z0-9_]*)/.exec(code)?.[1]
+  expect(className).toBeTruthy()
+
+  const dir = mkdtempSync(join(process.cwd(), '.codegen-java-'))
+  try {
+    const sdkDir = join(dir, 'org', 'openjobspec', 'sdk')
+    const classesDir = join(dir, 'classes')
+    mkdirSync(sdkDir, { recursive: true })
+    mkdirSync(classesDir)
+    writeFileSync(join(dir, `${className}.java`), code)
+    writeFileSync(join(sdkDir, 'OJSClient.java'), `package org.openjobspec.sdk;
+public class OJSClient {
+  public static OJSClient create(String url) { return new OJSClient(); }
+  public JobRequest enqueue(String type) { return new JobRequest(); }
+}`)
+    writeFileSync(join(sdkDir, 'JobRequest.java'), `package org.openjobspec.sdk;
+import java.time.Duration;
+import java.util.Map;
+public class JobRequest {
+  public JobRequest args(Map<String, Object> args) { return this; }
+  public JobRequest queue(String queue) { return this; }
+  public JobRequest retry(RetryPolicy retry) { return this; }
+  public JobRequest meta(Map<String, Object> meta) { return this; }
+  public JobRequest priority(int priority) { return this; }
+  public JobRequest timeout(Duration timeout) { return this; }
+  public Job send() { return new Job(); }
+}`)
+    writeFileSync(join(sdkDir, 'Job.java'), `package org.openjobspec.sdk;
+public class Job {
+  public String id() { return "id"; }
+  public String state() { return "available"; }
+}`)
+    writeFileSync(join(sdkDir, 'RetryPolicy.java'), `package org.openjobspec.sdk;
+import java.time.Duration;
+public class RetryPolicy {
+  public static Builder builder() { return new Builder(); }
+  public static class Builder {
+    public Builder maxAttempts(int value) { return this; }
+    public Builder initialInterval(Duration value) { return this; }
+    public Builder backoffCoefficient(double value) { return this; }
+    public Builder maxInterval(Duration value) { return this; }
+    public Builder jitter(boolean value) { return this; }
+    public RetryPolicy build() { return new RetryPolicy(); }
+  }
+}`)
+    writeFileSync(join(sdkDir, 'JobContext.java'), `package org.openjobspec.sdk;
+import java.util.Map;
+public class JobContext {
+  public ContextJob job() { return new ContextJob(); }
+  public static class ContextJob {
+    public Map<String, Object> args() { return Map.of(); }
+  }
+}`)
+    writeFileSync(join(sdkDir, 'OJSWorker.java'), `package org.openjobspec.sdk;
+import java.util.Map;
+public class OJSWorker {
+  public static Builder builder(String url) { return new Builder(); }
+  public static class Builder {
+    public Builder queues(String queue) { return this; }
+    public Builder concurrency(int count) { return this; }
+    public OJSWorker build() { return new OJSWorker(); }
+  }
+  public interface Handler { Map<String, Object> handle(JobContext context); }
+  public void register(String type, Handler handler) {}
+  public void start() {}
+  public void stop() {}
+}`)
+
+    const javaFiles = [
+      join(dir, `${className}.java`),
+      join(sdkDir, 'OJSClient.java'),
+      join(sdkDir, 'JobRequest.java'),
+      join(sdkDir, 'Job.java'),
+      join(sdkDir, 'RetryPolicy.java'),
+      join(sdkDir, 'JobContext.java'),
+      join(sdkDir, 'OJSWorker.java'),
+    ]
+    const result = spawnSync('javac', ['-d', classesDir, ...javaFiles], {
+      encoding: 'utf8',
+      maxBuffer: 4 * 1024 * 1024,
+    })
+    expect(result.status, `javac failed:\n${result.stderr || result.stdout}`).toBe(0)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}

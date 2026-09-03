@@ -31,7 +31,7 @@ export const useStore = create<StoreState>()(
       ...createLocalSlice(set, get, api),
 
       initFromContent: (content: string) => {
-        set({ editorContent: content })
+        get().setEditorContent(content)
         const mode = get().editorMode
 
         // Parse based on current editor mode

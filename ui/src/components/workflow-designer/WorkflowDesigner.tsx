@@ -380,11 +380,6 @@ export function WorkflowDesigner({
     [handleDeleteSelection]
   )
 
-  // Double-click node to start connecting
-  const _handleNodeDoubleClick = useCallback((nodeId: string) => {
-    dispatch({ type: 'START_CONNECT', nodeId })
-  }, [])
-
   // Generated code for preview
   const generatedCode = useMemo(
     () => generateCode(state.design, state.language),

@@ -40,7 +40,7 @@ func init() {
 	devCmd.Flags().BoolVar(&cfg.OpenBrowser, "open", cfg.OpenBrowser, "Open browser on start")
 	devCmd.Flags().BoolVarP(&cfg.Verbose, "verbose", "v", cfg.Verbose, "Verbose logging")
 	devCmd.Flags().StringVar(&cfg.DataDir, "data-dir", cfg.DataDir, "Data directory for SQLite (default: ~/.ojs-playground)")
-	devCmd.Flags().StringVar(&cfg.SuitesDir, "conformance-dir", cfg.SuitesDir, "Conformance suites directory (default: ../ojs-conformance/suites/http)")
+	devCmd.Flags().StringVar(&cfg.SuitesDir, "conformance-dir", cfg.SuitesDir, "Conformance suites root (default: auto-detect ojs-conformance/suites)")
 
 	// Store config reference for RunE
 	devCmd.PreRun = func(cmd *cobra.Command, args []string) {
@@ -76,14 +76,17 @@ func runDev(cmd *cobra.Command, args []string) error {
 
 	// Default conformance suites directory to common development layout
 	if cfg.SuitesDir == "" {
-		defaultDir := "../ojs-conformance/suites/http"
-		if info, err := os.Stat(defaultDir); err == nil && info.IsDir() {
+		if defaultDir := findConformanceSuitesDir(); defaultDir != "" {
 			cfg.SuitesDir = defaultDir
 			slog.Info("auto-detected conformance suites", "dir", defaultDir)
+		} else {
+			slog.Warn("conformance suites unavailable; runner endpoint will return 503")
 		}
 	}
 
-	ctx := context.Background()
+	appCtx, cancelApp := context.WithCancel(context.Background())
+	defer cancelApp()
+	ctx := appCtx
 
 	// Initialize SQLite history store
 	dbPath := filepath.Join(cfg.DataDir, "playground.db")
@@ -190,6 +193,7 @@ func runDev(cmd *cobra.Command, args []string) error {
 
 	// Build router with all dependencies
 	deps := &server.Deps{
+		Context:        appCtx,
 		Config:         cfg,
 		Store:          store,
 		Broadcaster:    broadcaster,
@@ -226,6 +230,7 @@ func runDev(cmd *cobra.Command, args []string) error {
 	<-quit
 
 	slog.Info("shutting down...")
+	cancelApp()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -236,6 +241,25 @@ func runDev(cmd *cobra.Command, args []string) error {
 	backendManager.Close()
 	slog.Info("server stopped")
 	return nil
+}
+
+func findConformanceSuitesDir() string {
+	candidates := make([]string, 0, 5)
+	base := "."
+	for range 5 {
+		candidates = append(candidates, filepath.Join(base, "ojs-conformance", "suites"))
+		base = filepath.Join(base, "..")
+	}
+	for _, candidate := range candidates {
+		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+			absolute, err := filepath.Abs(candidate)
+			if err == nil {
+				return absolute
+			}
+			return filepath.Clean(candidate)
+		}
+	}
+	return ""
 }
 
 func printBanner(cfg *server.Config) {
@@ -254,4 +278,3 @@ func printBanner(cfg *server.Config) {
 	fmt.Println("  Press Ctrl+C to stop")
 	fmt.Println()
 }
-

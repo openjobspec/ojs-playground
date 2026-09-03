@@ -1,0 +1,93 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  build-assets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+        with:
+          go-version: '1.24.x'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - name: Validate tag and package metadata
+        run: |
+          test "$GITHUB_REF_NAME" = "v$(node -p "require('./npm/package.json').version")"
+          grep -F "## [${GITHUB_REF_NAME#v}]" CHANGELOG.md
+      - name: Install locked frontend dependencies
+        working-directory: ui
+        run: npm ci
+      - name: Verify notices and build embedded frontend
+        working-directory: ui
+        run: |
+          npm run notices:check
+          npm run build
+      - name: Verify tracked embedded frontend
+        run: |
+          node scripts/sync-embedded-ui.mjs
+          git diff --exit-code -- server/internal/embed/dist THIRD_PARTY_NOTICES.md
+      - name: Run server tests
+        working-directory: server
+        run: GOWORK=off go test ./... -race
+      - name: Build all supported binaries
+        run: node scripts/build-release-assets.mjs
+      - name: Verify local release asset set
+        env:
+          OJS_RELEASE_TAG: ${{ github.ref_name }}
+        run: node scripts/verify-release-assets.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playground-release-assets
+          path: release-assets/
+          if-no-files-found: error
+
+  github-release:
+    needs: build-assets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: playground-release-assets
+          path: release-assets
+      - name: Attach all binaries to the GitHub release
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
+        with:
+          files: release-assets/*
+          fail_on_unmatched_files: true
+
+  publish-npm:
+    needs: github-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: playground-release-assets
+          path: release-assets
+      - name: Verify local release assets and package
+        env:
+          OJS_RELEASE_ASSETS: ${{ github.workspace }}/release-assets
+          OJS_RELEASE_TAG: ${{ github.ref_name }}
+        working-directory: npm
+        run: |
+          npm test
+          npm run check:package
+      - name: Publish launcher after release assets
+        working-directory: npm
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

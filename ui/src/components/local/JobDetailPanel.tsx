@@ -98,8 +98,8 @@ export function JobDetailPanel() {
           <Badge variant="outline" className="h-5 text-[10px]">
             {recentJobs.length}
           </Badge>
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={fetchJobs}>
-            <RefreshCw className="h-3 w-3" />
+          <Button variant="ghost" size="icon" className="h-9 w-9" onClick={fetchJobs} aria-label="Refresh recent jobs">
+            <RefreshCw className="h-3 w-3" aria-hidden="true" />
           </Button>
         </div>
       </div>
@@ -155,35 +155,38 @@ function JobDetail({
   const [history, setHistory] = useState<JobHistory[]>([])
 
   useEffect(() => {
+    const controller = new AbortController()
     const fetchDetail = async () => {
       try {
-        const [jobRes, histRes] = await Promise.all([
-          fetch(`${localUrl}/api/jobs/${jobId}`),
-          fetch(`${localUrl}/api/jobs/${jobId}/history`),
-        ])
+        const jobRes = await fetch(`${localUrl}/api/jobs/${jobId}`, {
+          signal: controller.signal,
+        })
         if (jobRes.ok) {
           const d = await jobRes.json()
-          setJob(d.job ?? null)
-        }
-        if (histRes.ok) {
-          const d = await histRes.json()
-          setHistory(d.history ?? [])
+          if (!controller.signal.aborted) {
+            setJob(d.job ?? null)
+            setHistory(d.state_history ?? [])
+          }
         }
       } catch {
-        // server not reachable
+        if (!controller.signal.aborted) {
+          setJob(null)
+          setHistory([])
+        }
       }
     }
     fetchDetail()
+    return () => controller.abort()
   }, [jobId, localUrl])
 
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-10 items-center gap-2 border-b px-3">
-        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onBack}>
-          <ArrowLeft className="h-3.5 w-3.5" />
+        <Button variant="ghost" size="icon" className="h-9 w-9" onClick={onBack} aria-label="Back to recent jobs">
+          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>
         <span className="text-sm font-medium truncate">
-          {job?.type ?? 'Loading...'}
+          {job?.type ?? 'Loading…'}
         </span>
         {job && (
           <Badge variant={stateVariant[job.state] ?? 'outline'} className="h-5 text-[10px]">
@@ -194,7 +197,7 @@ function JobDetail({
       <ScrollArea className="flex-1">
         {!job ? (
           <div className="flex h-32 items-center justify-center text-xs text-muted-foreground">
-            Loading job details...
+            Loading job details…
           </div>
         ) : (
           <div className="space-y-3 p-3">

@@ -69,6 +69,14 @@ export function Layout() {
   const isValid = useStore((s) => s.validationResult.valid)
   const isMobile = useMobile()
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>('editor')
+  const mobileRightTabs: RightTab[] = [
+    'code',
+    'templates',
+    'tutorials',
+    'comparison',
+    'conformance',
+    ...(isLocalMode ? ['workers', 'chaos', 'jobs', 'test-runner'] as const : []),
+  ]
 
   const renderRightPanel = () => {
     switch (activeTab) {
@@ -110,13 +118,13 @@ export function Layout() {
   if (isMobile) {
     return (
       <div className="flex h-full flex-col">
-        <div className="flex items-center border-b px-2 h-9 gap-0.5 shrink-0">
+        <div className="flex min-h-11 items-stretch border-b px-2 gap-0.5 shrink-0">
           {(['editor', 'viz', 'right'] as const).map((panel) => (
             <button
               key={panel}
               onClick={() => setMobilePanel(panel)}
               className={cn(
-                'h-6 px-3 text-[11px] font-medium rounded-md whitespace-nowrap transition-colors',
+                'min-h-11 px-3 text-[11px] font-medium rounded-md whitespace-nowrap transition-colors touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 mobilePanel === panel
                   ? 'bg-primary/10 text-primary'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted'
@@ -127,19 +135,19 @@ export function Layout() {
           ))}
         </div>
         {mobilePanel === 'right' && (
-          <div className="flex items-center border-b px-2 h-8 gap-0.5 overflow-x-auto shrink-0">
-            {(['code', 'templates', 'tutorials', 'comparison', 'conformance'] as const).map((tab) => (
+          <div className="flex min-h-11 items-stretch border-b px-2 gap-0.5 overflow-x-auto shrink-0">
+            {mobileRightTabs.map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className={cn(
-                  'h-5 px-2 text-[10px] font-medium rounded-md whitespace-nowrap transition-colors',
+                  'min-h-11 px-2 text-[10px] font-medium rounded-md whitespace-nowrap transition-colors touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   activeTab === tab
                     ? 'bg-primary/10 text-primary'
                     : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                 )}
               >
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {tab === 'test-runner' ? 'Tests' : tab.charAt(0).toUpperCase() + tab.slice(1)}
               </button>
             ))}
           </div>

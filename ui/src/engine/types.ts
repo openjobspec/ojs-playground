@@ -210,6 +210,7 @@ export interface ValidationResult {
 // ---- Sharing ----
 
 export interface ShareableState {
+  version?: 1
   spec: string
   editorMode?: 'json' | 'yaml'
   language?: CodegenLanguage

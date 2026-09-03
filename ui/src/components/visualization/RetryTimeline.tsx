@@ -66,16 +66,6 @@ export function RetryTimeline() {
       }))
   }, [baselineResult])
 
-  if (!simulationResult || data.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-        Run a simulation to see the timeline
-      </div>
-    )
-  }
-
-  const { totalDuration, totalAttempts, finalState, retryDelays } = simulationResult
-
   const backoffFormula = useMemo(() => {
     if (!parsedJob?.retry) return null
     const coeff = parsedJob.retry.backoff_coefficient ?? 2
@@ -96,6 +86,16 @@ export function RetryTimeline() {
       .filter((d) => d.isFail)
       .map((d) => d.time)
   }, [data])
+
+  if (!simulationResult || data.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+        Run a simulation to see the timeline
+      </div>
+    )
+  }
+
+  const { totalDuration, totalAttempts, finalState, retryDelays } = simulationResult
 
   return (
     <div className="h-full w-full flex flex-col">

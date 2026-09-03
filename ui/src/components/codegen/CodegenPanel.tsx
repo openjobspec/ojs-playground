@@ -5,7 +5,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { CodeOutput } from './CodeOutput'
 import { CodeActions } from './CodeActions'
-import { explainJob } from '@/engine/explain'
+import { explainJob, explainLineToHtml } from '@/engine/explain'
 import { ChevronDown, Lightbulb } from 'lucide-react'
 import type { CodegenLanguage, CodegenScope } from '@/engine/types'
 
@@ -81,11 +81,7 @@ export function CodegenPanel() {
             <div className="max-h-32 overflow-y-auto px-3 pb-2 space-y-1">
               {explanation.map((line, i) => (
                 <p key={i} className="text-[11px] text-muted-foreground leading-relaxed"
-                  dangerouslySetInnerHTML={{
-                    __html: line
-                      .replace(/\*\*(.*?)\*\*/g, '<strong class="text-foreground">$1</strong>')
-                      .replace(/`(.*?)`/g, '<code class="bg-muted px-0.5 rounded text-[10px]">$1</code>'),
-                  }}
+                  dangerouslySetInnerHTML={{ __html: explainLineToHtml(line) }}
                 />
               ))}
             </div>

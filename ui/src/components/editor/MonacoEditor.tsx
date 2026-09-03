@@ -4,6 +4,8 @@ import type { editor } from 'monaco-editor'
 import { useStore } from '@/store'
 import { useTheme } from '@/hooks/useTheme'
 import { findLineForPath } from '@/engine/validator'
+import { getEmbedOptions } from '@/engine/embed-config'
+import { applyUserEditorChange, syncExternalEditorContent } from './monaco-sync'
 
 import jobSchema from '../../../public/schema/job.schema.json'
 import retrySchema from '../../../public/schema/retry-policy.schema.json'
@@ -12,11 +14,13 @@ import errorSchema from '../../../public/schema/error.schema.json'
 
 export function MonacoEditor() {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
+  const applyingExternalChangeRef = useRef(false)
   const editorContent = useStore((s) => s.editorContent)
   const editorMode = useStore((s) => s.editorMode)
   const validationResult = useStore((s) => s.validationResult)
   const initFromContent = useStore((s) => s.initFromContent)
   const { resolvedTheme } = useTheme()
+  const readOnly = getEmbedOptions().readonly
 
   const handleMount: OnMount = useCallback(
     (editorInstance, monaco) => {
@@ -49,22 +53,24 @@ export function MonacoEditor() {
         ],
       })
 
-      // Set initial value if not already set
-      if (editorContent) {
-        editorInstance.setValue(editorContent)
-      }
+      syncExternalEditorContent(editorInstance, editorContent, applyingExternalChangeRef)
     },
     [editorContent],
   )
 
   const handleChange: OnChange = useCallback(
     (value) => {
-      if (value !== undefined) {
-        initFromContent(value)
-      }
+      applyUserEditorChange(value, applyingExternalChangeRef, initFromContent)
     },
     [initFromContent],
   )
+
+  useEffect(() => {
+    const instance = editorRef.current
+    if (instance) {
+      syncExternalEditorContent(instance, editorContent, applyingExternalChangeRef)
+    }
+  }, [editorContent])
 
   // Update Monaco markers from Ajv validation
   useEffect(() => {
@@ -114,6 +120,7 @@ export function MonacoEditor() {
         wordWrap: 'on',
         tabSize: 2,
         automaticLayout: true,
+        readOnly,
         formatOnPaste: true,
         suggest: {
           showWords: false,

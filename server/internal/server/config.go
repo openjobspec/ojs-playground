@@ -26,5 +26,6 @@ func DefaultConfig() *Config {
 		OpenBrowser: true,
 		Verbose:     false,
 		DataDir:     "",
+		SuitesDir:   "",
 	}
 }

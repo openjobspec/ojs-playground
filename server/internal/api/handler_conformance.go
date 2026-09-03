@@ -1,8 +1,9 @@
 package api
 
 import (
-	"encoding/json"
+	"context"
 	"net/http"
+	"sort"
 	"sync"
 	"time"
 
@@ -10,132 +11,298 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/openjobspec/ojs-playground/server/internal/conformance"
+	"github.com/openjobspec/ojs-playground/server/internal/httpjson"
 )
+
+type conformanceRunner interface {
+	Run(ctx context.Context, runID string, level int) *conformance.RunResult
+	TestCount(level int) int
+}
+
+// ConformanceHandlerOptions bounds background work and retained results.
+type ConformanceHandlerOptions struct {
+	MaxConcurrent   int
+	MaxRuns         int
+	RetentionTTL    time.Duration
+	CleanupInterval time.Duration
+}
+
+func defaultConformanceHandlerOptions() ConformanceHandlerOptions {
+	return ConformanceHandlerOptions{
+		MaxConcurrent:   2,
+		MaxRuns:         100,
+		RetentionTTL:    time.Hour,
+		CleanupInterval: 5 * time.Minute,
+	}
+}
 
 // ConformanceHandler handles conformance test endpoints.
 type ConformanceHandler struct {
-	mu     sync.RWMutex
-	runs   map[string]*ConformanceRun
-	runner *conformance.Runner
+	ctx     context.Context
+	mu      sync.Mutex
+	runs    map[string]*ConformanceRun
+	runner  conformanceRunner
+	running int
+	options ConformanceHandlerOptions
+	now     func() time.Time
 }
 
 // ConformanceRun represents a conformance test run.
 type ConformanceRun struct {
-	ID        string               `json:"id"`
-	Status    string               `json:"status"` // "running", "completed", "failed"
-	Level     int                  `json:"level"`
-	StartedAt time.Time            `json:"started_at"`
-	EndedAt   *time.Time           `json:"ended_at,omitempty"`
-	Results   any                  `json:"results,omitempty"`
-	RunResult *conformance.RunResult `json:"-"`
+	ID        string                 `json:"id"`
+	Status    string                 `json:"status"`
+	Level     int                    `json:"level"`
+	StartedAt time.Time              `json:"started_at"`
+	EndedAt   *time.Time             `json:"ended_at,omitempty"`
+	Results   *conformance.RunResult `json:"results,omitempty"`
+	cancel    context.CancelFunc
 }
 
-// NewConformanceHandler creates a new ConformanceHandler.
-func NewConformanceHandler(runner *conformance.Runner) *ConformanceHandler {
-	return &ConformanceHandler{
-		runs:   make(map[string]*ConformanceRun),
-		runner: runner,
+// NewConformanceHandler creates a bounded handler tied to the application context.
+func NewConformanceHandler(
+	ctx context.Context,
+	runner conformanceRunner,
+	options ConformanceHandlerOptions,
+) *ConformanceHandler {
+	defaults := defaultConformanceHandlerOptions()
+	if ctx == nil {
+		ctx = context.Background()
 	}
+	if options.MaxConcurrent <= 0 {
+		options.MaxConcurrent = defaults.MaxConcurrent
+	}
+	if options.MaxRuns <= 0 {
+		options.MaxRuns = defaults.MaxRuns
+	}
+	if options.RetentionTTL <= 0 {
+		options.RetentionTTL = defaults.RetentionTTL
+	}
+	if options.CleanupInterval <= 0 {
+		options.CleanupInterval = defaults.CleanupInterval
+	}
+
+	handler := &ConformanceHandler{
+		ctx:     ctx,
+		runs:    make(map[string]*ConformanceRun),
+		runner:  runner,
+		options: options,
+		now:     time.Now,
+	}
+	go handler.cleanupLoop()
+	return handler
 }
 
-// conformanceRunRequest is the expected request body for starting a run.
 type conformanceRunRequest struct {
 	Level int `json:"level"`
 }
 
 // Run handles POST /api/conformance/run.
 func (h *ConformanceHandler) Run(w http.ResponseWriter, r *http.Request) {
-	// Parse optional level from request body
-	var req conformanceRunRequest
-	if r.Body != nil {
-		_ = json.NewDecoder(r.Body).Decode(&req)
+	var request conformanceRunRequest
+	if decodeErr := httpjson.Decode(w, r, &request, 4<<10, true); decodeErr != nil {
+		WriteError(w, decodeErr.Status, decodeErr.Message)
+		return
 	}
-
-	uid, _ := uuid.NewV7()
-	id := uid.String()
-
-	run := &ConformanceRun{
-		ID:        id,
-		Status:    "running",
-		Level:     req.Level,
-		StartedAt: time.Now(),
+	if request.Level < 0 || request.Level > 4 {
+		WriteError(w, http.StatusBadRequest, "Conformance level must be between 0 and 4.")
+		return
+	}
+	if h.runner == nil || h.runner.TestCount(request.Level) == 0 {
+		WriteError(w, http.StatusServiceUnavailable, "Conformance suites are unavailable for the requested level.")
+		return
 	}
 
 	h.mu.Lock()
-	h.runs[id] = run
-	h.mu.Unlock()
-
-	if h.runner == nil {
-		// Placeholder behavior when no conformance runner is configured.
-		go func() {
-			time.Sleep(100 * time.Millisecond)
-			h.mu.Lock()
-			now := time.Now()
-			run.Status = "completed"
-			run.EndedAt = &now
-			run.Results = map[string]any{
-				"total":   0,
-				"passed":  0,
-				"failed":  0,
-				"message": "Conformance test execution is not yet available in the playground. Use the standalone ojs-conformance runner instead.",
-			}
-			h.mu.Unlock()
-		}()
-	} else {
-		go func() {
-			result := h.runner.Run(r.Context(), id, req.Level)
-			h.mu.Lock()
-			run.Status = result.Status
-			run.EndedAt = result.EndedAt
-			run.RunResult = result
-			run.Results = result
-			h.mu.Unlock()
-		}()
+	h.cleanupLocked()
+	if h.running >= h.options.MaxConcurrent {
+		h.mu.Unlock()
+		WriteError(w, http.StatusTooManyRequests, "Too many conformance runs are already active.")
+		return
+	}
+	h.enforceMaxRunsLocked(h.options.MaxRuns - 1)
+	if len(h.runs) >= h.options.MaxRuns {
+		h.mu.Unlock()
+		WriteError(w, http.StatusTooManyRequests, "Conformance run retention is full.")
+		return
 	}
 
-	WriteJSON(w, http.StatusAccepted, map[string]any{"run": run})
+	uid, err := uuid.NewV7()
+	if err != nil {
+		h.mu.Unlock()
+		WriteError(w, http.StatusInternalServerError, "Failed to allocate a conformance run ID.")
+		return
+	}
+	id := uid.String()
+	runContext, cancel := context.WithCancel(h.ctx)
+	run := &ConformanceRun{
+		ID:        id,
+		Status:    "running",
+		Level:     request.Level,
+		StartedAt: h.now(),
+		cancel:    cancel,
+	}
+	h.runs[id] = run
+	h.running++
+	snapshot := cloneConformanceRun(run)
+	h.mu.Unlock()
+
+	go h.execute(runContext, id, request.Level)
+	WriteJSON(w, http.StatusAccepted, map[string]any{"run": snapshot})
+}
+
+func (h *ConformanceHandler) execute(ctx context.Context, id string, level int) {
+	result := h.runner.Run(ctx, id, level)
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	run, ok := h.runs[id]
+	if !ok {
+		return
+	}
+	run.Status = result.Status
+	run.EndedAt = cloneTime(result.EndedAt)
+	run.Results = cloneRunResult(result)
+	run.cancel = nil
+	if h.running > 0 {
+		h.running--
+	}
+	h.cleanupLocked()
+}
+
+// CancelRun handles DELETE /api/conformance/run/{id}.
+func (h *ConformanceHandler) CancelRun(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	h.mu.Lock()
+	h.cleanupLocked()
+	run, ok := h.runs[id]
+	if !ok {
+		h.mu.Unlock()
+		WriteError(w, http.StatusNotFound, "Conformance run not found: "+id)
+		return
+	}
+	cancel := run.cancel
+	snapshot := cloneConformanceRun(run)
+	h.mu.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
+	WriteJSON(w, http.StatusAccepted, map[string]any{"run": snapshot})
 }
 
 // GetRun handles GET /api/conformance/run/{id}.
 func (h *ConformanceHandler) GetRun(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-
-	h.mu.RLock()
+	h.mu.Lock()
+	h.cleanupLocked()
 	run, ok := h.runs[id]
-	h.mu.RUnlock()
+	snapshot := cloneConformanceRun(run)
+	h.mu.Unlock()
 
 	if !ok {
 		WriteError(w, http.StatusNotFound, "Conformance run not found: "+id)
 		return
 	}
-
-	WriteJSON(w, http.StatusOK, map[string]any{"run": run})
+	WriteJSON(w, http.StatusOK, map[string]any{"run": snapshot})
 }
 
 // GetReport handles GET /api/conformance/run/{id}/report.
 func (h *ConformanceHandler) GetReport(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-
-	h.mu.RLock()
+	h.mu.Lock()
+	h.cleanupLocked()
 	run, ok := h.runs[id]
-	h.mu.RUnlock()
+	snapshot := cloneConformanceRun(run)
+	h.mu.Unlock()
 
 	if !ok {
 		WriteError(w, http.StatusNotFound, "Conformance run not found: "+id)
 		return
 	}
-
-	if run.RunResult != nil {
-		report := conformance.GenerateReport(run.RunResult)
-		WriteJSON(w, http.StatusOK, map[string]any{
-			"run":    run,
-			"report": report,
-		})
+	if snapshot.Results == nil {
+		WriteJSON(w, http.StatusOK, map[string]any{"run": snapshot, "report": nil})
 		return
 	}
-
 	WriteJSON(w, http.StatusOK, map[string]any{
-		"run":    run,
-		"report": run.Results,
+		"run":    snapshot,
+		"report": conformance.GenerateReport(snapshot.Results),
 	})
+}
+
+func (h *ConformanceHandler) cleanupLoop() {
+	ticker := time.NewTicker(h.options.CleanupInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-h.ctx.Done():
+			return
+		case <-ticker.C:
+			h.mu.Lock()
+			h.cleanupLocked()
+			h.mu.Unlock()
+		}
+	}
+}
+
+func (h *ConformanceHandler) cleanupLocked() {
+	cutoff := h.now().Add(-h.options.RetentionTTL)
+	for id, run := range h.runs {
+		if run.Status != "running" && run.EndedAt != nil && run.EndedAt.Before(cutoff) {
+			delete(h.runs, id)
+		}
+	}
+	h.enforceMaxRunsLocked(h.options.MaxRuns)
+}
+
+func (h *ConformanceHandler) enforceMaxRunsLocked(max int) {
+	if max < 0 {
+		max = 0
+	}
+	if len(h.runs) <= max {
+		return
+	}
+	completed := make([]*ConformanceRun, 0, len(h.runs))
+	for _, run := range h.runs {
+		if run.Status != "running" {
+			completed = append(completed, run)
+		}
+	}
+	sort.Slice(completed, func(i, j int) bool {
+		return completed[i].StartedAt.Before(completed[j].StartedAt)
+	})
+	for _, run := range completed {
+		if len(h.runs) <= max {
+			break
+		}
+		delete(h.runs, run.ID)
+	}
+}
+
+func cloneConformanceRun(run *ConformanceRun) *ConformanceRun {
+	if run == nil {
+		return nil
+	}
+	clone := *run
+	clone.EndedAt = cloneTime(run.EndedAt)
+	clone.Results = cloneRunResult(run.Results)
+	clone.cancel = nil
+	return &clone
+}
+
+func cloneRunResult(result *conformance.RunResult) *conformance.RunResult {
+	if result == nil {
+		return nil
+	}
+	clone := *result
+	clone.EndedAt = cloneTime(result.EndedAt)
+	clone.Tests = append([]conformance.TestResult(nil), result.Tests...)
+	return &clone
+}
+
+func cloneTime(value *time.Time) *time.Time {
+	if value == nil {
+		return nil
+	}
+	clone := *value
+	return &clone
 }

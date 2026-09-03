@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/openjobspec/ojs-playground/server/internal/ai"
+	"github.com/openjobspec/ojs-playground/server/internal/httpjson"
 )
 
 // AIHandler provides HTTP endpoints for the AI-assisted job design feature.
@@ -61,9 +62,12 @@ func (h *AIHandler) GetSystemPrompt(w http.ResponseWriter, r *http.Request) {
 // In production, this would call an LLM API. For now, it matches against templates.
 func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	var req ai.GenerateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "invalid request body"})
+	if decodeErr := httpjson.Decode(w, r, &req, 64<<10, false); decodeErr != nil {
+		writeJSON(w, decodeErr.Status, map[string]string{"error": decodeErr.Message})
+		return
+	}
+	if len(req.Prompt) > 8<<10 || len(req.Template) > 128 || len(req.Language) > 32 {
+		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "request field is too large"})
 		return
 	}
 

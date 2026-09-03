@@ -1,0 +1,1 @@
+import{j as a}from"./xyflow-BjyyB-fm.js";import{c as e}from"./index-DbRRJYVo.js";function t({className:r,...o}){return a.jsx("div",{className:e("bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm",r),...o})}export{t as C};

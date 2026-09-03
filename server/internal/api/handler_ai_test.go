@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/openjobspec/ojs-playground/server/internal/ai"
@@ -117,7 +118,13 @@ func TestGenerateWithoutLLM(t *testing.T) {
 
 	var resp ai.GenerateResponse
 	json.NewDecoder(rec.Body).Decode(&resp)
-	if len(resp.Errors) == 0 {
-		t.Error("expected error about missing LLM API")
+	// Generate is a template-matching placeholder: with no LLM configured it must
+	// degrade gracefully by returning a usable manifest plus guidance that points
+	// at the system-prompt endpoint, rather than failing or returning nothing.
+	if resp.Manifest == "" {
+		t.Error("expected a fallback template manifest when no LLM is configured")
+	}
+	if !strings.Contains(resp.Code, "/api/ai/prompt") {
+		t.Errorf("expected guidance referencing the system-prompt endpoint, got %q", resp.Code)
 	}
 }

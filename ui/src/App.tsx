@@ -13,12 +13,15 @@ import { useSimulation } from '@/hooks/useSimulation'
 import { useStore } from '@/store'
 import { DEFAULT_JOB_JSON } from '@/engine/constants'
 import { trackEvent } from '@/engine/analytics'
+import { getEmbedOptions } from '@/engine/embed-config'
+import { useLocalModeDetection } from '@/hooks/useLocalModeDetection'
 
 const AUTO_SIM_KEY = 'ojs-playground-auto-sim-done'
 
 function AppInner() {
   useTheme()
   useKeyboardShortcuts()
+  useLocalModeDetection()
   const { loadFromUrl } = useShare()
   const { play, reset } = useSimulation()
   const editorContent = useStore((s) => s.editorContent)
@@ -29,13 +32,10 @@ function AppInner() {
     trackEvent('playground_loaded')
 
     // Check for embedded spec parameter
-    const params = new URLSearchParams(window.location.search)
-    const embeddedSpec = params.get('spec')
+    const embeddedSpec = getEmbedOptions().spec
     if (embeddedSpec) {
-      try {
-        initFromContent(decodeURIComponent(embeddedSpec))
-        return
-      } catch { /* fall through */ }
+      initFromContent(embeddedSpec)
+      return
     }
 
     // Try loading from URL hash first

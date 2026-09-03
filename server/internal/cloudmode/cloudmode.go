@@ -10,15 +10,17 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/openjobspec/ojs-playground/server/internal/httpjson"
 )
 
 // Config holds cloud mode configuration.
 type Config struct {
-	Enabled     bool          `json:"enabled"`
-	CloudURL    string        `json:"cloud_url"`    // OJS Cloud gateway URL
-	AdminKey    string        `json:"admin_key"`    // OJS Cloud admin API key
-	TenantTTL   time.Duration `json:"tenant_ttl"`   // auto-cleanup after this duration
-	MaxTenants  int           `json:"max_tenants"`  // concurrent ephemeral tenants
+	Enabled    bool          `json:"enabled"`
+	CloudURL   string        `json:"cloud_url"`   // OJS Cloud gateway URL
+	AdminKey   string        `json:"admin_key"`   // OJS Cloud admin API key
+	TenantTTL  time.Duration `json:"tenant_ttl"`  // auto-cleanup after this duration
+	MaxTenants int           `json:"max_tenants"` // concurrent ephemeral tenants
 }
 
 // EphemeralTenant represents a temporary playground tenant.
@@ -149,7 +151,16 @@ func (h *Handler) Provision(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		SessionID string `json:"session_id"`
 	}
-	json.NewDecoder(r.Body).Decode(&req)
+	if decodeErr := httpjson.Decode(w, r, &req, 4<<10, true); decodeErr != nil {
+		w.WriteHeader(decodeErr.Status)
+		json.NewEncoder(w).Encode(map[string]string{"error": decodeErr.Message})
+		return
+	}
+	if len(req.SessionID) > 128 {
+		w.WriteHeader(http.StatusRequestEntityTooLarge)
+		json.NewEncoder(w).Encode(map[string]string{"error": "session_id is too large"})
+		return
+	}
 	if req.SessionID == "" {
 		req.SessionID = fmt.Sprintf("%d", time.Now().UnixNano())
 	}

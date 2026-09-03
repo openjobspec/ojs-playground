@@ -6,11 +6,13 @@ Drop-in widget that lets documentation sites embed a live OJS interaction panel.
 
 ## Quick Start
 
-Add one `<script>` tag to your page:
+The legacy iframe widget is distributed from this repository and is not
+currently hosted at a public `embed.js` endpoint. Copy `embed/embed.js` and
+`embed/embed.html` to the same directory on your static host, then add:
 
 ```html
 <script
-  src="https://playground.openjobspec.org/embed.js"
+  src="/ojs-embed/embed.js"
   data-url="http://localhost:8080"
   data-theme="dark">
 </script>
@@ -35,7 +37,7 @@ All options are set via `data-*` attributes on the script tag:
 
 ```html
 <script
-  src="https://playground.openjobspec.org/embed.js"
+  src="/ojs-embed/embed.js"
   data-url="https://demo.openjobspec.org"
   data-theme="light"
   data-width="500"
@@ -47,7 +49,7 @@ All options are set via `data-*` attributes on the script tag:
 
 ```html
 <script
-  src="https://playground.openjobspec.org/embed.js"
+  src="/ojs-embed/embed.js"
   data-url="https://demo.openjobspec.org"
   data-theme="dark"
   data-width="100%"
@@ -61,7 +63,7 @@ If you prefer not to use the loader script, embed the HTML directly:
 
 ```html
 <iframe
-  src="https://playground.openjobspec.org/embed.html?url=http://localhost:8080&theme=dark"
+  src="/ojs-embed/embed.html?url=http://localhost:8080&theme=dark"
   width="100%"
   height="300"
   style="border:none;border-radius:8px"
@@ -106,6 +108,10 @@ If you prefer not to use the loader script, embed the HTML directly:
 ## Self-Hosting
 
 To self-host the widget, copy `embed.html` and `embed.js` to your static file server. The script auto-resolves `embed.html` relative to its own `src` URL — no configuration needed.
+
+For new integrations, prefer the web component produced by
+`cd ui && npm ci && npm run build`. Serve `ui/dist/ojs-playground.js` from your
+deployment and use the `<ojs-playground>` example in the repository README.
 
 <!-- Screenshot placeholder: replace with actual screenshot -->
 <!-- ![OJS Playground Widget](./screenshot.png) -->

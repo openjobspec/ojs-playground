@@ -53,19 +53,23 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
       validationResult: { valid: true, errors: [] },
     }),
   addTab: (title, content) => {
-    const { tabs } = get()
+    const { tabs, activeTabId, editorContent } = get()
     if (tabs.length >= 10) return
     const id = `tab-${++tabCounter}`
     const newTab: EditorTab = { id, title: title ?? `Job ${tabs.length + 1}`, content: content ?? '' }
-    set({ tabs: [...tabs, newTab], activeTabId: id, editorContent: newTab.content })
+    const updatedTabs = tabs.map((tab) =>
+      tab.id === activeTabId ? { ...tab, content: editorContent } : tab
+    )
+    set({ tabs: [...updatedTabs, newTab], activeTabId: id, editorContent: newTab.content })
   },
   removeTab: (id) => {
     const { tabs, activeTabId } = get()
     if (tabs.length <= 1) return
+    const removedIndex = tabs.findIndex((tab) => tab.id === id)
     const filtered = tabs.filter((t) => t.id !== id)
     if (activeTabId === id) {
-      const first = filtered[0]!
-      set({ tabs: filtered, activeTabId: first.id, editorContent: first.content })
+      const next = filtered[Math.min(Math.max(removedIndex, 0), filtered.length - 1)]!
+      set({ tabs: filtered, activeTabId: next.id, editorContent: next.content })
     } else {
       set({ tabs: filtered })
     }
@@ -83,4 +87,3 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
     set({ tabs: get().tabs.map((t) => (t.id === id ? { ...t, title } : t)) })
   },
 })
-

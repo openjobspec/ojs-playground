@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useStore } from '@/store'
 import { Label } from '@/components/ui/label'
 import { Slider } from '@/components/ui/slider'
@@ -27,14 +27,16 @@ export function ChaosPanel() {
   const isLocalMode = useStore((s) => s.isLocalMode)
   const localUrl = useStore((s) => s.localUrl)
   const [chaos, setChaos] = useState<ChaosState>(defaultState)
-  const [active, setActive] = useState(false)
+  const generationRef = useRef(0)
 
-  const fetchChaos = useCallback(async () => {
+  const fetchChaos = useCallback(async (signal: AbortSignal, generation: number) => {
     try {
-      const res = await fetch(`${localUrl}/api/chaos`)
+      const res = await fetch(`${localUrl}/api/chaos`, { signal })
       if (!res.ok) return
       const data = await res.json()
-      setChaos(data.chaos ?? defaultState)
+      if (!signal.aborted && generation === generationRef.current) {
+        setChaos(data.chaos ?? defaultState)
+      }
     } catch {
       // server not reachable
     }
@@ -42,40 +44,47 @@ export function ChaosPanel() {
 
   useEffect(() => {
     if (!isLocalMode) return
-    fetchChaos()
+    const generation = ++generationRef.current
+    const controller = new AbortController()
+    fetchChaos(controller.signal, generation)
+    return () => {
+      generationRef.current++
+      controller.abort()
+    }
   }, [isLocalMode, fetchChaos])
 
-  useEffect(() => {
-    setActive(
-      chaos.fail_next_n > 0 || chaos.latency_ms > 0 || chaos.timeout_next || chaos.paused_queues.length > 0,
-    )
-  }, [chaos])
+  const active = chaos.fail_next_n > 0 ||
+    chaos.latency_ms > 0 ||
+    chaos.timeout_next ||
+    chaos.paused_queues.length > 0
 
   const updateChaos = async (patch: Partial<ChaosState>) => {
+    const generation = generationRef.current
     try {
       const res = await fetch(`${localUrl}/api/chaos`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch),
       })
-      if (res.ok) {
+      if (res.ok && generation === generationRef.current) {
         const data = await res.json()
         setChaos(data.chaos ?? defaultState)
       }
     } catch {
-      toast.error('Failed to update chaos config')
+      if (generation === generationRef.current) toast.error('Failed to update chaos config')
     }
   }
 
   const resetChaos = async () => {
+    const generation = generationRef.current
     try {
       const res = await fetch(`${localUrl}/api/chaos`, { method: 'DELETE' })
-      if (res.ok) {
+      if (res.ok && generation === generationRef.current) {
         setChaos(defaultState)
         toast.success('Chaos config reset')
       }
     } catch {
-      toast.error('Failed to reset chaos config')
+      if (generation === generationRef.current) toast.error('Failed to reset chaos config')
     }
   }
 

@@ -9,6 +9,7 @@ export function useKeyboardShortcuts() {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const mod = e.metaKey || e.ctrlKey
+      if (shouldIgnoreShortcutTarget(e.target)) return
 
       // Cmd+K: Command palette (toggle)
       if (mod && e.key === 'k') {
@@ -40,4 +41,11 @@ export function useKeyboardShortcuts() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [play, reset, setCommandPaletteOpen])
+}
+
+export function shouldIgnoreShortcutTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false
+  return Boolean(target.closest(
+    '.monaco-editor, input, textarea, select, [contenteditable="true"], [role="textbox"]',
+  ))
 }
